@@ -1,0 +1,123 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Client {
+  id                String             @id @default(uuid())
+  name              String
+  isActive          Boolean            @default(true)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  ApiKeys           ApiKey[]
+  BlockchainAccounts BlockchainAccount[]
+  Transactions      Transaction[]
+  Deposits          Deposit[]
+  Withdrawals       Withdrawal[]
+  WebhookDeliveries WebhookDelivery[]
+  AuditLogs         AuditLog[]
+}
+
+model ApiKey {
+  id          String       @id @default(uuid())
+  clientId    String
+  client      Client       @relation(fields: [clientId], references: [id])
+  keyHash     String       @unique
+  name        String
+  isActive    Boolean      @default(true)
+  expiresAt   DateTime?
+  lastUsedAt  DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  Permissions Permission[]
+}
+
+model Permission {
+  id        String   @id @default(uuid())
+  apiKeyId  String
+  apiKey    ApiKey   @relation(fields: [apiKeyId], references: [id])
+  scope     String   // e.g., MINT, TRANSFER, WITHDRAW
+  createdAt DateTime @default(now())
+}
+
+model BlockchainAccount {
+  id        String   @id @default(uuid())
+  clientId  String
+  client    Client   @relation(fields: [clientId], references: [id])
+  address   String   @unique
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Deposit {
+  id            String   @id @default(uuid())
+  clientId      String
+  client        Client   @relation(fields: [clientId], references: [id])
+  referenceId   String   @unique
+  amount        Decimal  @db.Decimal(20, 8)
+  currency      String   @default("INR")
+  status        String   // PENDING, VERIFIED, REJECTED
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  Transactions  Transaction[]
+}
+
+model Withdrawal {
+  id            String   @id @default(uuid())
+  clientId      String
+  client        Client   @relation(fields: [clientId], references: [id])
+  idempotencyKey String  @unique
+  amount        Decimal  @db.Decimal(20, 8)
+  bankDetails   Json
+  status        String   // REQUESTED, APPROVED, REJECTED, BURN_PENDING, SETTLED
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  Transactions  Transaction[]
+}
+
+model Transaction {
+  id               String   @id @default(uuid())
+  clientId         String
+  client           Client   @relation(fields: [clientId], references: [id])
+  type             String   // MINT, TRANSFER, BURN
+  referenceId      String?  // On-chain settlement reference (key into VittaGemsSettlement)
+  idempotencyKey   String?  @unique
+  depositId        String?
+  deposit          Deposit? @relation(fields: [depositId], references: [id])
+  withdrawalId     String?
+  withdrawal       Withdrawal? @relation(fields: [withdrawalId], references: [id])
+  amount           Decimal  @db.Decimal(20, 8)
+  fromAddress      String?
+  toAddress        String?
+  status           String   // PENDING, SUBMITTED, CONFIRMED, FAILED
+  blockchainTxHash String?  @unique
+  failureReason    String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model WebhookDelivery {
+  id        String   @id @default(uuid())
+  clientId  String
+  client    Client   @relation(fields: [clientId], references: [id])
+  event     String
+  payload   Json
+  status    String   // PENDING, DELIVERED, FAILED
+  attempts  Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  clientId  String?
+  client    Client?  @relation(fields: [clientId], references: [id])
+  action    String
+  details   Json
+  createdAt DateTime @default(now())
+}

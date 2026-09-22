@@ -1,0 +1,260 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Client {
+  id                String             @id @default(uuid())
+  name              String
+  isActive          Boolean            @default(true)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  ApiKeys           ApiKey[]
+  BlockchainAccounts BlockchainAccount[]
+  Transactions      Transaction[]
+  Deposits          Deposit[]
+  Withdrawals       Withdrawal[]
+  WebhookDeliveries WebhookDelivery[]
+  AuditLogs         AuditLog[]
+  Proposals         Proposal[]
+  Wallets           WhitelistedWallet[]
+  Documents         ProofDocument[]
+}
+
+model ApiKey {
+  id          String       @id @default(uuid())
+  clientId    String
+  client      Client       @relation(fields: [clientId], references: [id])
+  keyHash     String       @unique
+  name        String
+  isActive    Boolean      @default(true)
+  expiresAt   DateTime?
+  lastUsedAt  DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  Permissions Permission[]
+}
+
+model Permission {
+  id        String   @id @default(uuid())
+  apiKeyId  String
+  apiKey    ApiKey   @relation(fields: [apiKeyId], references: [id])
+  scope     String   // e.g., MINT, TRANSFER, WITHDRAW
+  createdAt DateTime @default(now())
+}
+
+model BlockchainAccount {
+  id        String   @id @default(uuid())
+  clientId  String
+  client    Client   @relation(fields: [clientId], references: [id])
+  address   String   @unique
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Deposit {
+  id            String   @id @default(uuid())
+  clientId      String
+  client        Client   @relation(fields: [clientId], references: [id])
+  referenceId   String   @unique
+  amount        Decimal  @db.Decimal(20, 8)
+  currency      String   @default("USD")
+  status        String   // PENDING_VERIFICATION, VERIFIED, REJECTED
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  Transactions  Transaction[]
+  Proposals     Proposal[]
+}
+
+model Withdrawal {
+  id            String   @id @default(uuid())
+  clientId      String
+  client        Client   @relation(fields: [clientId], references: [id])
+  idempotencyKey String  @unique
+  amount        Decimal  @db.Decimal(20, 8)
+  bankDetails   Json
+  // REQUESTED, BURN_PENDING, SETTLED (direct flow)
+  // LOCK_PENDING, LOCKED, PAYOUT_SUBMITTED, BURN_PENDING, SETTLED, RELEASE_PENDING, RELEASED, FAILED (DAO flow)
+  status        String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  Transactions  Transaction[]
+  Proposals     Proposal[]
+}
+
+model Transaction {
+  id               String   @id @default(uuid())
+  clientId         String
+  client           Client   @relation(fields: [clientId], references: [id])
+  type             String   // MINT, TRANSFER, BURN
+  referenceId      String?  // On-chain settlement reference (key into VittaGemsSettlement)
+  proposalId       String?  // v2: DAO proposal backing this transaction
+  proposal         Proposal? @relation(fields: [proposalId], references: [id])
+  corridor         String?  // held for mints deferred until DAO approval
+  idempotencyKey   String?  @unique
+  depositId        String?
+  deposit          Deposit? @relation(fields: [depositId], references: [id])
+  withdrawalId     String?
+  withdrawal       Withdrawal? @relation(fields: [withdrawalId], references: [id])
+  amount           Decimal  @db.Decimal(20, 8)
+  fromAddress      String?
+  toAddress        String?
+  status           String   // PENDING, SUBMITTED, CONFIRMED, FAILED
+  blockchainTxHash String?  @unique
+  failureReason    String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model WebhookDelivery {
+  id        String   @id @default(uuid())
+  clientId  String
+  client    Client   @relation(fields: [clientId], references: [id])
+  event     String
+  payload   Json
+  status    String   // PENDING, DELIVERED, FAILED
+  attempts  Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  clientId  String?
+  client    Client?  @relation(fields: [clientId], references: [id])
+  action    String
+  details   Json
+  createdAt DateTime @default(now())
+}
+
+/// A DAO verification request. Two sources share this model:
+///   OFFCHAIN - votes are cast by DaoMembers through this API (works on the v1 contract)
+///   ONCHAIN  - mirrors a v2 DAOGovernor proposal; `onChainId` is the governor's id
+model Proposal {
+  id                String    @id @default(uuid())
+  mode              String    @default("OFFCHAIN")
+  onChainId         String?   @unique
+  clientId          String
+  client            Client    @relation(fields: [clientId], references: [id])
+  type              String    // DEPOSIT, WITHDRAWAL, INTERNAL_TRANSFER
+  state             String    // PENDING, APPROVED, REJECTED, EXPIRED, EXECUTED
+  amount            Decimal   @db.Decimal(20, 8)
+  providerAddress   String
+  toAddress         String?
+  referenceId       String?
+  depositId         String?
+  deposit           Deposit?    @relation(fields: [depositId], references: [id])
+  withdrawalId      String?
+  withdrawal        Withdrawal? @relation(fields: [withdrawalId], references: [id])
+
+  // Evidence the DAO reviews
+  proofReference    String?   // bank reference / UTR of the incoming deposit
+  payerName         String?
+  proofNotes        String?
+  documentHash      String?
+  payoutReference   String?   // UTR of the outgoing fiat payout (withdrawals)
+  payoutSubmittedAt DateTime?
+
+  // Voting
+  quorumRequired    Int       @default(0)
+  votesFor          Int       @default(0)
+  votesAgainst      Int       @default(0)
+
+  // Time window
+  expiresAt         DateTime?
+  extensionCount    Int       @default(0)
+  bankDelayFlagged  Boolean   @default(false)
+
+  // Outcome
+  resolutionMessage String?
+  resolvedAt        DateTime?
+  failureReason     String?
+  proofTxHash       String?
+  requestTxHash     String?
+  lockTxHash        String?
+  releaseTxHash     String?
+  executeTxHash     String?
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  Transactions      Transaction[]
+  Votes             ProposalVote[]
+  Events            ProposalEvent[]
+  Documents         ProofDocument[]
+}
+
+/// A verifier. Authenticates with its own token (never a client API key).
+model DaoMember {
+  id        String         @id @default(uuid())
+  name      String
+  tokenHash String         @unique
+  isActive  Boolean        @default(true)
+  createdAt DateTime       @default(now())
+  Votes     ProposalVote[]
+}
+
+model ProposalVote {
+  id         String    @id @default(uuid())
+  proposalId String
+  proposal   Proposal  @relation(fields: [proposalId], references: [id])
+  memberId   String
+  member     DaoMember @relation(fields: [memberId], references: [id])
+  decision   String    // APPROVE, REJECT
+  comment    String?
+  createdAt  DateTime  @default(now())
+
+  @@unique([proposalId, memberId])
+}
+
+/// Append-only timeline of everything that happened to a proposal.
+model ProposalEvent {
+  id         String   @id @default(uuid())
+  proposalId String
+  proposal   Proposal @relation(fields: [proposalId], references: [id])
+  type       String   // CREATED, VOTE, APPROVED, REJECTED, EXPIRED, EXTENDED, PAYOUT_PROOF, LOCKED, RELEASED, EXECUTED, FAILED
+  actor      String?
+  message    String
+  createdAt  DateTime @default(now())
+}
+
+/// A wallet that may receive or hold settlement value. Nothing is minted or
+/// transferred to an address that is not ACTIVE here, and the on-chain partner
+/// registration only happens for wallets approved in this list.
+model WhitelistedWallet {
+  id          String    @id @default(uuid())
+  address     String    @unique   // stored lowercase
+  label       String
+  clientId    String?
+  client      Client?   @relation(fields: [clientId], references: [id])
+  status      String    @default("PENDING") // PENDING, ACTIVE, REJECTED, REVOKED
+  reason      String?
+  requestedBy String?
+  decidedBy   String?   // DAO member name
+  decidedAt   DateTime?
+  onChainRegisteredAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+/// Supporting evidence (bank statement, receipt, screenshot) for a deposit or a
+/// payout, stored on disk and shown to DAO members next to the bank reference.
+model ProofDocument {
+  id          String   @id @default(uuid())
+  proposalId  String?
+  proposal    Proposal? @relation(fields: [proposalId], references: [id])
+  clientId    String
+  client      Client   @relation(fields: [clientId], references: [id])
+  kind        String   // DEPOSIT_PROOF, PAYOUT_PROOF
+  filename    String
+  mimeType    String
+  sizeBytes   Int
+  sha256      String
+  storageKey  String   @unique
+  uploadedBy  String
+  createdAt   DateTime @default(now())
+}

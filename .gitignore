@@ -1,0 +1,12 @@
+
+
+# uploaded proof documents
+storage/
+/node_modules
+/dist
+
+/uploads
+.env
+coverage
+yarn.lock
+yarn-error.log

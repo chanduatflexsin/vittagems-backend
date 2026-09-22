@@ -1,6 +1,8 @@
 import { ClientService } from '../../src/modules/clients/client.service';
 import { prismaMock } from '../setup';
 
+const VALID_ADDRESS = '0x0133F71677B3de040CA09c63F285DE5EDD3912Be';
+
 describe('ClientService.generateApiKey', () => {
   it('returns a raw key with the given prefix and a deterministic HMAC hash', () => {
     const { rawKey, keyHash } = ClientService.generateApiKey();
@@ -22,16 +24,25 @@ describe('ClientService.generateApiKey', () => {
 });
 
 describe('ClientService.registerClient', () => {
+  // Registering a client also submits its wallet for whitelisting.
+  beforeEach(() => {
+    prismaMock.whitelistedWallet.findUnique.mockResolvedValue(null);
+    prismaMock.whitelistedWallet.create.mockResolvedValue({
+      id: 'w1', address: VALID_ADDRESS.toLowerCase(), label: 'Acme settlement wallet', status: 'PENDING',
+      reason: null, decidedBy: null, decidedAt: null, onChainRegisteredAt: null, createdAt: new Date(),
+    } as any);
+  });
+
   it('creates a client with a hashed key, requested permissions, and optional blockchain account', async () => {
     prismaMock.client.create.mockResolvedValue({ id: 'client-1', name: 'Acme' } as any);
 
-    const result = await ClientService.registerClient('Acme', ['MINT', 'TRANSFER'], '0xabc');
+    const result = await ClientService.registerClient('Acme', ['MINT', 'TRANSFER'], '0x0133F71677B3de040CA09c63F285DE5EDD3912Be');
 
     expect(result.clientId).toBe('client-1');
     expect(result.name).toBe('Acme');
     expect(result.apiKey).toMatch(/^vg_live_/);
     expect(result.permissions).toEqual(['MINT', 'TRANSFER']);
-    expect(result.blockchainAddress).toBe('0xabc');
+    expect(result.blockchainAddress).toBe('0x0133F71677B3de040CA09c63F285DE5EDD3912Be');
 
     const createArgs = prismaMock.client.create.mock.calls[0][0] as any;
     expect(createArgs.data.name).toBe('Acme');
@@ -39,7 +50,7 @@ describe('ClientService.registerClient', () => {
       { scope: 'MINT' },
       { scope: 'TRANSFER' },
     ]);
-    expect(createArgs.data.BlockchainAccounts.create).toEqual({ address: '0xabc' });
+    expect(createArgs.data.BlockchainAccounts.create).toEqual({ address: '0x0133F71677B3de040CA09c63F285DE5EDD3912Be' });
   });
 
   it('omits BlockchainAccounts creation when no address is provided', async () => {

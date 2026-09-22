@@ -65,7 +65,7 @@ async function pollWithdrawal(id) {
 
 async function mintFlow(tag, amount) {
   const ref = `DEP-${runId}-${tag}`;
-  await call('POST', '/deposits', { body: { amount, currency: 'INR', referenceId: ref } });
+  await call('POST', '/deposits', { body: { amount, currency: 'USD', referenceId: ref } });
   const m = await call('POST', '/mint', {
     body: { amount, referenceId: ref, toAddress: partnerA, corridor: 'US-MX' },
     idem: `mint-${runId}-${tag}`,

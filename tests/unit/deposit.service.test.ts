@@ -5,7 +5,7 @@ describe('DepositService.registerMockDeposit', () => {
   const baseInput = {
     clientId: 'client-1',
     amount: '100.5',
-    currency: 'INR',
+    currency: 'USD',
     referenceId: 'ref-001',
   };
 
@@ -29,21 +29,21 @@ describe('DepositService.registerMockDeposit', () => {
       data: {
         clientId: 'client-1',
         amount: '100.5',
-        currency: 'INR',
+        currency: 'USD',
         referenceId: 'ref-001',
         status: 'VERIFIED',
       },
     });
   });
 
-  it('defaults currency to INR when not provided', async () => {
+  it('defaults currency to USD when not provided', async () => {
     prismaMock.deposit.findUnique.mockResolvedValue(null);
     prismaMock.deposit.create.mockResolvedValue({ id: 'dep-2', referenceId: 'ref-002', status: 'VERIFIED' } as any);
 
     await DepositService.registerMockDeposit({ ...baseInput, currency: undefined as any, referenceId: 'ref-002' });
 
     const createArgs = prismaMock.deposit.create.mock.calls[0][0] as any;
-    expect(createArgs.data.currency).toBe('INR');
+    expect(createArgs.data.currency).toBe('USD');
   });
 
   it('throws ConflictError when the referenceId already exists', async () => {

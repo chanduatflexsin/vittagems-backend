@@ -6,6 +6,9 @@ jest.mock('../../src/blockchain/BlockchainService', () => ({
     transfer: jest.fn(),
     burn: jest.fn(),
     closeSettlementForWithdrawal: jest.fn(),
+    hold: jest.fn(),
+    releaseHold: jest.fn(),
+    getSettlement: jest.fn(),
     getTransactionStatus: jest.fn(),
     ensureOperatorRoles: jest.fn().mockResolvedValue(undefined),
     isPartnerApproved: jest.fn().mockResolvedValue(true),
@@ -184,6 +187,79 @@ describe('transaction.worker processJob', () => {
       transactionId: 'tx-1',
       error: 'chain unreachable',
     });
+  });
+});
+
+describe('transaction.worker - DAO withdrawal lock / release', () => {
+  const lockTx = {
+    id: 'lock-1',
+    type: 'LOCK',
+    status: 'PENDING',
+    clientId: 'client-1',
+    amount: '1000',
+    fromAddress: '0xAbC',
+    withdrawalId: 'w1',
+    proposalId: 'p1',
+  };
+  const lockJob = { name: 'process-lock', data: { transactionId: 'lock-1', referenceId: 'INV-1', amount: '1000' } };
+
+  it('locks a settlement held by the withdrawing wallet and marks the withdrawal LOCKED', async () => {
+    prismaMock.transaction.findUnique.mockResolvedValue(lockTx as any);
+    (blockchainService.getSettlement as jest.Mock).mockResolvedValue({ exists: true, status: 'MINTED', partner: '0xabc' });
+    (blockchainService.hold as jest.Mock).mockResolvedValue('0xlock');
+    (blockchainService.getTransactionStatus as jest.Mock).mockResolvedValue('CONFIRMED');
+
+    await runProcessor(lockJob);
+
+    expect(blockchainService.hold).toHaveBeenCalledWith('INV-1', expect.stringContaining('pending DAO verification'));
+    expect(prismaMock.withdrawal.updateMany).toHaveBeenCalledWith({
+      where: { id: 'w1', status: 'LOCK_PENDING' },
+      data: { status: 'LOCKED' },
+    });
+    expect(prismaMock.proposal.update).toHaveBeenCalledWith({ where: { id: 'p1' }, data: { lockTxHash: '0xlock' } });
+  });
+
+  it('refuses to lock a settlement held by another wallet and fails the withdrawal', async () => {
+    prismaMock.transaction.findUnique.mockResolvedValue(lockTx as any);
+    (blockchainService.getSettlement as jest.Mock).mockResolvedValue({ exists: true, status: 'TRANSFERRED', partner: '0xpartner' });
+
+    await expect(runProcessor(lockJob)).rejects.toThrow(/held by 0xpartner/);
+
+    expect(blockchainService.hold).not.toHaveBeenCalled();
+    expect(prismaMock.withdrawal.update).toHaveBeenCalledWith({ where: { id: 'w1' }, data: { status: 'FAILED' } });
+    expect(prismaMock.proposal.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'p1', state: 'PENDING' }, data: expect.objectContaining({ state: 'REJECTED' }) }),
+    );
+  });
+
+  it('treats a release of an already-unlocked settlement as done without a transaction', async () => {
+    prismaMock.transaction.findUnique.mockResolvedValue({ ...lockTx, id: 'rel-1', type: 'RELEASE' } as any);
+    (blockchainService.releaseHold as jest.Mock).mockResolvedValue(null);
+
+    await runProcessor({ name: 'process-release', data: { transactionId: 'rel-1', referenceId: 'INV-1' } });
+
+    expect(blockchainService.getTransactionStatus).not.toHaveBeenCalled();
+    expect(prismaMock.transaction.update).toHaveBeenNthCalledWith(2, {
+      where: { id: 'rel-1' },
+      data: { status: 'CONFIRMED', blockchainTxHash: null },
+    });
+    expect(prismaMock.withdrawal.update).toHaveBeenCalledWith({ where: { id: 'w1' }, data: { status: 'RELEASED' } });
+  });
+
+  it('passes releaseWithdrawalHold through to the burn for DAO-approved withdrawals', async () => {
+    prismaMock.transaction.findUnique.mockResolvedValue({ ...lockTx, id: 'burn-1', type: 'BURN' } as any);
+    (blockchainService.closeSettlementForWithdrawal as jest.Mock).mockResolvedValue('0xburn');
+    (blockchainService.getTransactionStatus as jest.Mock).mockResolvedValue('CONFIRMED');
+
+    await runProcessor({
+      name: 'process-burn',
+      data: { transactionId: 'burn-1', referenceId: 'INV-1', releaseWithdrawalHold: true },
+    });
+
+    expect(blockchainService.closeSettlementForWithdrawal).toHaveBeenCalledWith('INV-1', { releaseWithdrawalHold: true });
+    expect(prismaMock.proposal.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ state: 'EXECUTED', executeTxHash: '0xburn' }) }),
+    );
   });
 });
 

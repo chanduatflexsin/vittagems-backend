@@ -66,7 +66,7 @@ erDiagram
         string   clientId FK
         string   referenceId UK
         decimal  amount "Decimal(20,8)"
-        string   currency "default INR"
+        string   currency "default USD"
         string   status "PENDING | VERIFIED | REJECTED"
         datetime createdAt
         datetime updatedAt
@@ -214,7 +214,7 @@ Fiat funds received from a client, pending verification before minting.
 | `clientId` | `String` | FK → `Client.id` | |
 | `referenceId` | `String` | **unique** | External deposit reference; dedupe key. |
 | `amount` | `Decimal(20,8)` | required | |
-| `currency` | `String` | default `"INR"` | |
+| `currency` | `String` | default `"USD"` | |
 | `status` | `String` | required | `PENDING`, `VERIFIED`, `REJECTED`. |
 | `createdAt` | `DateTime` | default `now()` | |
 | `updatedAt` | `DateTime` | `@updatedAt` | |

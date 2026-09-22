@@ -61,7 +61,7 @@ erDiagram
         string   clientId FK
         string   referenceId UK
         decimal  amount "Decimal(20,8)"
-        string   currency "default INR"
+        string   currency "default USD"
         string   status "PENDING | VERIFIED | REJECTED"
         datetime createdAt
         datetime updatedAt

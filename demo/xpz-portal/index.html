@@ -16,6 +16,7 @@
         <div class="brand-sub">Operations Portal</div>
       </div>
     </div>
+    <div class="nav-group">XPZ Corp</div>
     <nav>
       <button class="nav-btn active" data-tab="dashboard">📊 Dashboard</button>
       <button class="nav-btn" data-tab="payments">💳 Customer Payments</button>
@@ -24,9 +25,14 @@
       <button class="nav-btn" data-tab="console">🧪 API Console <span id="log-count" class="pill">0</span></button>
       <button class="nav-btn" data-tab="settings">🔌 Connection</button>
     </nav>
+    <div class="nav-group dao-group">VittaGems DAO</div>
+    <nav>
+      <button class="nav-btn dao-nav" data-tab="dao">🗳️ DAO Verification <span id="dao-badge" class="pill alert hidden">0</span></button>
+    </nav>
     <div class="sidebar-foot">
       <div class="powered">Settlement powered by<br /><strong>VittaGems Settlement API</strong></div>
       <div id="conn" class="conn"><span class="dot"></span><span id="conn-text">checking…</span></div>
+      <div id="dao-mode" class="conn"><span class="dot"></span><span id="dao-mode-text">DAO: checking…</span></div>
     </div>
   </aside>
 
@@ -35,7 +41,7 @@
     <section id="tab-dashboard" class="tab active">
       <header class="page-head">
         <h1>Dashboard</h1>
-        <p class="muted">XPZ runs its own books. Only the <em>settlement</em> step is delegated to the VittaGems Settlement API.</p>
+        <p class="muted">XPZ runs its own books. Settlement is delegated to the VittaGems Settlement API, and every mint and withdrawal is verified by the VittaGems DAO before it touches the chain.</p>
       </header>
 
       <div id="setup-banner" class="banner hidden">
@@ -46,16 +52,18 @@
         <button class="btn primary" data-goto="settings">Connect →</button>
       </div>
 
+      <div id="wallet-banner" class="banner warn-banner hidden"></div>
+
       <div class="stats" id="stats"></div>
 
       <div class="grid-2">
         <div class="card">
-          <h3>How the integration works</h3>
+          <h3>How a settlement is verified</h3>
           <ol class="flow">
-            <li><span class="step">1</span><div><strong>Customer pays XPZ (fiat)</strong><div class="muted">XPZ records the invoice in its own system.</div></div></li>
-            <li><span class="step">2</span><div><strong>Settle on-chain</strong><div class="muted"><code>POST /deposits</code> → <code>POST /mint</code> → poll <code>GET /mint/{id}</code>. Settlement is keyed by the invoice number.</div></div></li>
-            <li><span class="step">3</span><div><strong>Pay a partner</strong><div class="muted"><code>POST /transfers</code> moves the whole settlement to a partner wallet.</div></div></li>
-            <li><span class="step">4</span><div><strong>Customer cash-out</strong><div class="muted"><code>POST /withdrawals</code> → XPZ pays fiat from its bank → <code>POST /withdrawals/{id}/approve</code> burns &amp; closes the settlement.</div></div></li>
+            <li><span class="step">1</span><div><strong>Customer pays XPZ (fiat)</strong><div class="muted">XPZ records the invoice with the bank transfer reference (UTR).</div></div></li>
+            <li><span class="step">2</span><div><strong>Settle request → DAO</strong><div class="muted"><code>POST /deposits</code> with the bank proof and <code>POST /mint</code>. The mint is held.</div></div></li>
+            <li><span class="step">3</span><div><strong>DAO members verify and vote</strong><div class="muted">Quorum of approvals releases the mint on-chain. Rejection or an expired window mints nothing.</div></div></li>
+            <li><span class="step">4</span><div><strong>Withdrawal</strong><div class="muted">Funds are <em>locked</em> on-chain → XPZ pays the customer → submits the payout UTR → DAO approves (burn) or rejects / window expires (funds released back).</div></div></li>
           </ol>
         </div>
         <div class="card">
@@ -69,7 +77,7 @@
     <section id="tab-payments" class="tab">
       <header class="page-head">
         <h1>Customer Payments</h1>
-        <p class="muted">Fiat received by XPZ. Click <strong>Settle on-chain</strong> to mint the settlement via the API.</p>
+        <p class="muted">Fiat received by XPZ. <strong>Settle on-chain</strong> sends the bank proof to the DAO; the mint only happens once the DAO approves it.</p>
       </header>
 
       <div class="card">
@@ -78,8 +86,13 @@
           <label>Customer <input name="customer" placeholder="Alice Sharma" required /></label>
           <label>Invoice # <input name="invoice" placeholder="INV-1001" required /></label>
           <label>Amount <input name="amount" type="number" step="0.01" min="0.01" placeholder="1000" required /></label>
-          <label>Currency <input name="currency" value="INR" required /></label>
+          <label>Currency <input name="currency" value="USD" required /></label>
           <label>Corridor <input name="corridor" value="IN-IN" /></label>
+          <label>Bank reference (UTR) <input name="utr" placeholder="UTR-ICIC-554201" required /></label>
+          <label class="wide">Payer / notes <input name="payer" placeholder="NEFT from ICICI a/c ending 4411" /></label>
+          <label class="wide">Proof document (optional)
+            <input name="doc" type="file" accept="image/*,application/pdf,text/plain,text/csv,.doc,.docx,.xls,.xlsx" />
+          </label>
           <div class="actions">
             <button class="btn primary" type="submit">Record payment</button>
             <button class="btn" type="button" id="btn-seed">Seed samples</button>
@@ -91,7 +104,7 @@
         <h3>Invoices</h3>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>Invoice</th><th>Customer</th><th>Amount</th><th>XPZ status</th><th>Settlement tx</th><th>Actions</th></tr></thead>
+            <thead><tr><th>Invoice</th><th>Customer</th><th>Amount</th><th>Bank proof</th><th>Status</th><th>Settlement tx</th><th>Actions</th></tr></thead>
             <tbody id="tbl-invoices"></tbody>
           </table>
         </div>
@@ -132,35 +145,78 @@
     <section id="tab-withdrawals" class="tab">
       <header class="page-head">
         <h1>Withdrawals</h1>
-        <p class="muted">Customer cash-out. Request → XPZ pays fiat from its bank → <strong>Fiat sent</strong> closes (burns) the settlement on-chain.</p>
+        <p class="muted">Customer cash-out. The settlement is <strong>locked on-chain</strong> first. Pay the customer from XPZ's bank, submit the payout reference, and the DAO verifies it: approved → burned; rejected or window expired → released back.</p>
       </header>
 
       <div class="card">
         <h3>Request withdrawal</h3>
         <form id="form-withdrawal" class="form-row">
-          <label>Invoice <select name="ref" id="sel-wd-invoice" required></select></label>
+          <label>Settled invoice <select name="ref" id="sel-wd-invoice" required></select></label>
           <label>Account holder <input name="holder" placeholder="Alice Sharma" required /></label>
           <label>Account no. <input name="account" placeholder="000123456789" required /></label>
           <label>IFSC <input name="ifsc" placeholder="HDFC0001234" required /></label>
+          <label>Verification window
+            <select name="window">
+              <option value="">Server default</option>
+              <option value="1">1 min (demo expiry)</option>
+              <option value="5">5 min</option>
+              <option value="15">15 min</option>
+              <option value="60">60 min</option>
+            </select>
+          </label>
           <div class="actions"><button class="btn primary" type="submit">Request withdrawal</button></div>
         </form>
+        <p class="muted small">Only invoices still held by XPZ's wallet can be withdrawn. An invoice already paid out to a partner is held by that partner on-chain.</p>
       </div>
 
       <div class="card">
         <h3>Withdrawal requests</h3>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>Withdrawal</th><th>Invoice</th><th>Amount</th><th>Bank</th><th>Status</th><th>Burn tx</th><th>Actions</th></tr></thead>
+            <thead><tr><th>Withdrawal</th><th>Invoice</th><th>Amount</th><th>Bank</th><th>Status</th><th>On-chain</th><th>Actions</th></tr></thead>
             <tbody id="tbl-withdrawals"></tbody>
           </table>
         </div>
       </div>
     </section>
 
+    <!-- ───────── DAO VERIFICATION ───────── -->
+    <section id="tab-dao" class="tab">
+      <header class="page-head">
+        <div class="eyebrow-dao">VittaGems DAO · verifier console</div>
+        <h1>DAO Verification</h1>
+        <p class="muted" id="dao-intro">Members check each request against the bank evidence and vote. It passes with the quorum of approvals and fails with the same number of rejections; if the window closes first, nothing is minted and locked funds are released.</p>
+      </header>
+
+      <div class="card dao-members">
+        <div class="dao-members-row">
+          <div>
+            <div class="label-sm">Acting as</div>
+            <div id="dao-member-chips" class="chips"></div>
+          </div>
+          <div id="dao-config" class="dao-config"></div>
+        </div>
+      </div>
+
+      <div class="card" id="dao-wallets-card">
+        <h3>Wallet whitelist <span id="wallet-pending-pill" class="pill alert hidden">0</span></h3>
+        <p class="muted small">Settlement value can only be minted to, transferred to, or withdrawn from a wallet approved here.</p>
+        <div id="dao-wallets"></div>
+      </div>
+
+      <div class="filter-row">
+        <button class="filter active" data-dao-filter="MINE">Needs my vote <span id="f-mine" class="pill">0</span></button>
+        <button class="filter" data-dao-filter="PENDING">All pending <span id="f-pending" class="pill">0</span></button>
+        <button class="filter" data-dao-filter="ALL">History</button>
+      </div>
+
+      <div id="dao-list" class="dao-list"></div>
+    </section>
+
     <!-- ───────── API CONSOLE ───────── -->
     <section id="tab-console" class="tab">
       <header class="page-head row">
-        <div><h1>API Console</h1><p class="muted">Every call this portal makes to the Settlement API — newest first.</p></div>
+        <div><h1>API Console</h1><p class="muted">Every call this portal makes to the Settlement API — newest first. Background status refreshes are not logged.</p></div>
         <button class="btn" id="btn-clear-log">Clear</button>
       </header>
       <div id="log" class="log"></div>
@@ -170,7 +226,7 @@
     <section id="tab-settings" class="tab">
       <header class="page-head">
         <h1>Connection</h1>
-        <p class="muted">How XPZ authenticates with the VittaGems Settlement API.</p>
+        <p class="muted">How XPZ authenticates with the VittaGems Settlement API, and the DAO members used for this demo.</p>
       </header>
 
       <div class="grid-2">
@@ -184,6 +240,21 @@
             </label>
             <button class="btn primary" type="submit">Onboard &amp; get API key</button>
           </form>
+        </div>
+
+        <div class="card">
+          <h3>Settlement wallets</h3>
+          <p class="muted">A wallet must be whitelisted by the DAO before anything can be settled to it.</p>
+          <div id="client-wallets" class="member-list"></div>
+        </div>
+
+        <div class="card">
+          <h3>DAO members</h3>
+          <p class="muted">In production DAO members are independent verifiers with their own logins. For the demo, register three members here; each gets its own token (<code>POST /dao/members</code>) and you can switch between them in the DAO console.</p>
+          <div id="settings-members" class="member-list"></div>
+          <div class="actions">
+            <button class="btn primary" type="button" id="btn-add-members">Add demo members</button>
+          </div>
         </div>
 
         <div class="card">

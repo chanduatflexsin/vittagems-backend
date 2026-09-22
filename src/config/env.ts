@@ -27,6 +27,17 @@ const envSchema = z.object({
   // Corridor label applied to mints when a request does not supply one.
   DEFAULT_CORRIDOR: z.string().default('DEFAULT'),
 
+  // ── Settlement contract generation ────────────────────────────
+  // 'v1' = VittaGemsSettlement (reference-keyed ledger, currently deployed).
+  // 'v2' = DAO-gated SettlementToken suite (ERC20 + DAOGovernor + registries).
+  SETTLEMENT_VERSION: z.enum(['v1', 'v2']).default('v1'),
+
+  // v2 contract addresses (required only when SETTLEMENT_VERSION=v2).
+  SETTLEMENT_TOKEN_ADDRESS: z.string().regex(/^0x[a-fA-F0-9]{40}$/).optional(),
+  DAO_GOVERNOR_ADDRESS: z.string().regex(/^0x[a-fA-F0-9]{40}$/).optional(),
+  PROVIDER_REGISTRY_ADDRESS: z.string().regex(/^0x[a-fA-F0-9]{40}$/).optional(),
+  PROOF_REGISTRY_ADDRESS: z.string().regex(/^0x[a-fA-F0-9]{40}$/).optional(),
+
   // Address a redeemed settlement is transferred to before it is burned on payout
   // confirmation. Defaults to the operator wallet when unset. Must be (or will be
   // auto-registered as) an approved partner on the settlement contract.
@@ -44,6 +55,36 @@ const envSchema = z.object({
     .string()
     .regex(/^0x[a-fA-F0-9]{40}$/)
     .optional(),
+
+  // ── DAO verification ──────────────────────────────────────────
+  // When enabled, deposits are not minted and withdrawals are not burned until
+  // DAO members vote to approve them. Off by default so the direct flow is unchanged.
+  DAO_VERIFICATION_ENABLED: z
+    .string()
+    .default('false')
+    .transform((v) => v === 'true'),
+  // Approvals needed to pass, and rejections needed to fail (as DAOGovernor.quorumThreshold).
+  DAO_QUORUM: z.string().default('2').transform(Number),
+  // How long the DAO has to verify an incoming deposit.
+  DAO_DEPOSIT_WINDOW_MINUTES: z.string().default('60').transform(Number),
+  // How long the client has to pay out fiat and get it verified before funds are released.
+  DAO_WITHDRAWAL_WINDOW_MINUTES: z.string().default('60').transform(Number),
+  // Extra time granted each time a bank delay is flagged, and how many times.
+  DAO_WITHDRAWAL_EXTENSION_MINUTES: z.string().default('30').transform(Number),
+  DAO_MAX_EXTENSIONS: z.string().default('2').transform(Number),
+  // How often expired verification windows are swept.
+  DAO_SWEEP_INTERVAL_SECONDS: z.string().default('10').transform(Number),
+
+  // ── Wallet whitelist ──────────────────────────────────────────
+  // Nothing is minted or transferred to an address that is not whitelisted.
+  WALLET_WHITELIST_ENABLED: z
+    .string()
+    .default('true')
+    .transform((v) => v !== 'false'),
+
+  // ── Proof documents ───────────────────────────────────────────
+  PROOF_STORAGE_DIR: z.string().default('storage/proofs'),
+  PROOF_MAX_MB: z.string().default('10').transform(Number),
 
   WEBHOOK_SECRET: z.string().min(16),
   // Per-IP request cap per 15-minute window for /api routes.

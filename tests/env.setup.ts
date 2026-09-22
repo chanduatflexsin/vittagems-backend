@@ -13,6 +13,12 @@ process.env.QUORUM_CHAIN_ID = process.env.QUORUM_CHAIN_ID || '7001';
 process.env.VITTAGEM_CONTRACT_ADDRESS = process.env.VITTAGEM_CONTRACT_ADDRESS || '0x0000000000000000000000000000000000000000';
 // Never broadcast real transactions from the unit test suite.
 process.env.BLOCKCHAIN_MODE = process.env.BLOCKCHAIN_MODE || 'mock';
+// The dev .env turns DAO verification on; the suite tests the direct flow by default
+// and switches the flag on explicitly in the DAO tests.
+process.env.DAO_VERIFICATION_ENABLED = 'false';
+// Whitelist enforcement is covered by its own tests; the rest of the suite
+// exercises the flows without it.
+process.env.WALLET_WHITELIST_ENABLED = 'false';
 // Well-known public Hardhat test account #0 key — not a real secret, safe for local/test use.
 // (The all-zero key is rejected by secp256k1: it must satisfy 0 < key < curve order.)
 process.env.BLOCKCHAIN_PRIVATE_KEY = process.env.BLOCKCHAIN_PRIVATE_KEY || '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';

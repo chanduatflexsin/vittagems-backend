@@ -48,10 +48,15 @@ describe('Unknown routes', () => {
 describe('POST /api/v1/clients/register', () => {
   it('registers a new client and returns a raw API key exactly once', async () => {
     prismaMock.client.create.mockResolvedValue({ id: 'client-new', name: 'New Co' } as any);
+    prismaMock.whitelistedWallet.findUnique.mockResolvedValue(null);
+    prismaMock.whitelistedWallet.create.mockResolvedValue({
+      id: 'w1', address: '0x0133f71677b3de040ca09c63f285de5edd3912be', label: 'New Co settlement wallet',
+      status: 'PENDING', reason: null, decidedBy: null, decidedAt: null, onChainRegisteredAt: null, createdAt: new Date(),
+    } as any);
 
     const res = await request(app)
       .post('/api/v1/clients/register')
-      .send({ name: 'New Co', permissions: ['MINT'], blockchainAddress: '0xabc' });
+      .send({ name: 'New Co', permissions: ['MINT'], blockchainAddress: '0x0133F71677B3de040CA09c63F285DE5EDD3912Be' });
 
     expect(res.status).toBe(201);
     expect(res.body.success).toBe(true);
@@ -129,7 +134,7 @@ describe('POST /api/v1/deposits', () => {
     const res = await request(app)
       .post('/api/v1/deposits')
       .set('Authorization', AUTH_HEADER)
-      .send({ amount: '100', currency: 'INR', referenceId: 'ref-1' });
+      .send({ amount: '100', currency: 'USD', referenceId: 'ref-1' });
 
     expect(res.status).toBe(201);
     expect(res.body.data.status).toBe('VERIFIED');

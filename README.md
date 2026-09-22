@@ -92,9 +92,9 @@ Key points:
 - **Amounts** (fiat `Decimal`) are scaled to the contract's 18-decimal units
   (`SETTLEMENT_TOKEN_DECIMALS`).
 - The **operator wallet** (`BLOCKCHAIN_PRIVATE_KEY`) is the deployer/treasury; the worker
-  self-grants `SETTLEMENT_AGENT` + `COMPLIANCE_OPERATOR` on first use and auto-registers a
-  partner before minting to it. The wallet must be registered in the on-chain account
-  permissioning contract or its transactions are dropped at the node.
+  self-grants `SETTLEMENT_AGENT` + `COMPLIANCE_OPERATOR` on first use, and registers a partner
+  on-chain only if that wallet is whitelisted (see below). The wallet must also be listed in the network's
+  `permission-config.json` (see below) or its transactions are rejected at the node.
 - **Withdrawal / burn:** flow is _request → pay fiat off-chain → confirm sent → burn_.
   The contract can't burn a `MINTED` settlement directly, so confirming a payout
   (`POST /withdrawals/:id/approve`) runs `closeSettlementForWithdrawal`, which walks it
@@ -102,6 +102,16 @@ Key points:
   the withdrawal `SETTLED`. Only call approve **after** the fiat has actually been sent.
 - Set `BLOCKCHAIN_MODE=mock` to run without a node (used by the test suite); `live` broadcasts
   real transactions.
+- **Network permissioning:** the Quorum nodes run with `--permissioned` and GoQuorum
+  Permissioning v2 (`permission-config.json`), so only accounts listed there may submit
+  transactions — anyone else is rejected with `account does not have permission for the
+  transaction`. The operator wallet must be in that list. Note this is *chain-level* access
+  control; partner wallets only ever receive settlements (ledger entries) and never sign, so
+  they do not need to be permissioned.
+- **Startup preflight:** the server verifies the RPC is reachable, the chain id matches, and
+  the settlement contract exists at `VITTAGEM_CONTRACT_ADDRESS` before it accepts traffic. If
+  the Quorum network is rebuilt, redeploy the contract and update that address — otherwise
+  startup fails loudly with `SETTLEMENT_CONTRACT_MISSING` instead of failing on every mint.
 
 Verify the full lifecycle against a running network:
 
@@ -129,6 +139,95 @@ We use Jest for automated integration testing:
 
 ```bash
 npm run test
+```
+
+## DAO verification of deposits and withdrawals
+
+Set `DAO_VERIFICATION_ENABLED=true` and no value moves on-chain until independent DAO
+members have verified the off-chain fiat leg. Members authenticate with their own tokens
+(`X-DAO-Token`), never a client API key, so the party moving money is never the party
+approving it.
+
+**Deposit → mint**
+
+1. `POST /deposits` with `proof.bankReference` (UTR) - deposit is `PENDING_VERIFICATION`
+2. `POST /mint` - recorded as `AWAITING_APPROVAL`, **not** sent to the chain
+3. Members review the evidence and vote: `POST /dao/proposals/{id}/votes`
+4. `DAO_QUORUM` approvals -> deposit `VERIFIED`, mint released to the chain.
+   `DAO_QUORUM` rejections (a comment is required) or the window closing -> deposit
+   `REJECTED`, nothing is minted.
+
+**Withdrawal → burn or release**
+
+1. `POST /withdrawals` - the settlement is **locked on-chain** (`hold` -> `ON_HOLD`), so it cannot be moved
+2. The client pays the customer from its bank, then `POST /withdrawals/{id}/payout-proof` with that UTR
+   (members cannot vote before this exists)
+3. Bank slow? `POST /withdrawals/{id}/extend` adds `DAO_WITHDRAWAL_EXTENSION_MINUTES`, up to `DAO_MAX_EXTENSIONS` times
+4. Approved -> lock lifted and the settlement burned -> `SETTLED`.
+   Rejected, or nobody verified it before the window closed -> lock lifted and funds returned -> `RELEASED`
+   with *"Withdrawal not yet finished ... your locked funds have been released back to you"*.
+
+A background sweeper (`DAO_SWEEP_INTERVAL_SECONDS`) closes expired windows. Every proposal keeps an
+append-only timeline (created, votes, extensions, lock, release, burn). The thresholds match the v2
+`DAOGovernor` contract, so moving the votes on-chain later does not change the rules.
+
+| Setting | Meaning |
+|---|---|
+| `DAO_QUORUM` | Approvals to pass, and rejections to fail |
+| `DAO_DEPOSIT_WINDOW_MINUTES` | Time the DAO has to verify a deposit |
+| `DAO_WITHDRAWAL_WINDOW_MINUTES` | Time to pay out and be verified before funds are released (a request may pass `windowMinutes`, 1-1440) |
+| `DAO_WITHDRAWAL_EXTENSION_MINUTES` / `DAO_MAX_EXTENSIONS` | Bank-delay extensions |
+
+```bash
+npm run e2e:dao   # approve, reject, lock->burn, lock->release, extension, window expiry - against the live chain
+```
+
+The XPZ demo portal has a **DAO Verification** console (switch between demo members, review
+evidence, vote, extend) alongside XPZ's own payments and withdrawals.
+
+**Limits of this version:** votes are recorded and enforced by the backend (auditable, not yet
+trustless) - the operator key could still act outside the DAO. On the v1 contract a withdrawal
+can only redeem a whole settlement, and a settlement already paid out to a partner is held by that
+partner and cannot be withdrawn by the client. `POST /dao/members` is public for the demo and must
+be admin-only in production.
+
+## Wallet whitelist and proof documents
+
+**Nothing settles to an address that is not whitelisted.** `WALLET_WHITELIST_ENABLED=true`
+(the default) means a mint, transfer or withdrawal is refused with `WALLET_NOT_WHITELISTED`
+unless the address is ACTIVE in the whitelist.
+
+- Registering a client submits its `blockchainAddress` automatically, as `PENDING`; a client
+  can register more with `POST /wallets`.
+- DAO members review the queue (`GET /dao/wallets`) and approve, reject or revoke
+  (`POST /dao/wallets/{id}/approve|reject|revoke`). Rejecting and revoking require a reason,
+  which is shown back to the client in the error.
+- Enforced twice: when the request is made, and again in the worker immediately before
+  signing - so a wallet revoked while a job sits in the queue is still stopped.
+- The on-chain `registerPartner` call only ever happens for an approved wallet, so the
+  contract's approved partners stay a subset of the whitelist. (Previously the worker
+  auto-registered any address it was handed, which is exactly what this replaces.)
+
+**Proof documents.** Deposits and payouts can carry supporting evidence - a bank statement,
+a receipt screenshot, a PDF - which DAO members read next to the bank reference:
+
+```bash
+# the file goes up as the raw request body; no multipart, no base64
+curl -X POST localhost:3000/api/v1/deposits/$DEPOSIT_ID/documents \
+  -H "Authorization: Bearer $API_KEY" \
+  -H "Content-Type: application/pdf" -H "X-File-Name: statement.pdf" \
+  --data-binary @statement.pdf
+```
+
+Images, PDF, text/CSV, Word and Excel are accepted, up to `PROOF_MAX_MB` (10 by default);
+anything else is refused. Files are written under `PROOF_STORAGE_DIR` under a generated key
+(never the uploaded name, so a name can't escape the directory), and each is stored with its
+SHA-256 so a document can be shown to have not changed. `POST /withdrawals/{id}/documents`
+does the same for payout receipts. Members open them at `GET /dao/documents/{id}`; a client
+can read back only its own via `GET /documents/{id}`.
+
+```bash
+npm run e2e:wallets   # whitelist enforcement + upload/download, against the live chain
 ```
 
 ## Demo integrator portal (XPZ Corp)

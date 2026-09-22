@@ -2,6 +2,7 @@ import { PrismaClient } from '@prisma/client';
 import crypto from 'crypto';
 import { env } from '../../config/env';
 import { NotFoundError } from '../../utils/errors';
+import { WalletService } from '../wallets/wallet.service';
 
 const prisma = new PrismaClient();
 
@@ -23,6 +24,10 @@ export class ClientService {
 
   static async registerClient(name: string, requestedPermissions: string[], blockchainAddress?: string) {
     // In a real system, this is an internal admin action.
+    // Validate the wallet first: registering the client and then failing on the
+    // address would leave a client behind with no usable wallet.
+    if (blockchainAddress) WalletService.assertValidAddress(blockchainAddress);
+
     const { rawKey, keyHash } = this.generateApiKey();
 
     const client = await prisma.client.create({
@@ -43,12 +48,22 @@ export class ClientService {
       }
     });
 
+    // The wallet is registered but NOT usable yet: the DAO must whitelist it
+    // before anything can be minted to or withdrawn from it.
+    let wallet = null;
+    if (blockchainAddress) {
+      wallet = WalletService.serialize(
+        await WalletService.request(client.id, blockchainAddress, `${name} settlement wallet`, name),
+      );
+    }
+
     return {
       clientId: client.id,
       name: client.name,
       apiKey: rawKey, // IMPORTANT: The user must save this!
       permissions: requestedPermissions,
-      blockchainAddress
+      blockchainAddress,
+      wallet,
     };
   }
 

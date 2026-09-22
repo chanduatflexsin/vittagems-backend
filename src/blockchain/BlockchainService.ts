@@ -35,12 +35,15 @@ export interface IBlockchainService {
   transfer(referenceId: string, toAddress: string, amount: string): Promise<string>;
   reconcile(referenceId: string): Promise<string>;
   burn(referenceId: string): Promise<string>;
-  closeSettlementForWithdrawal(referenceId: string): Promise<string>;
+  closeSettlementForWithdrawal(referenceId: string, opts?: { releaseWithdrawalHold?: boolean }): Promise<string>;
+  hold(referenceId: string, reason: string): Promise<string>;
+  releaseHold(referenceId: string): Promise<string | null>;
   registerPartner(partnerAddress: string, name: string): Promise<string>;
   isPartnerApproved(partnerAddress: string): Promise<boolean>;
   getSettlement(referenceId: string): Promise<OnChainSettlement>;
   getOutstandingBalance(address: string): Promise<bigint>;
   ensureOperatorRoles(): Promise<void>;
+  preflight(): Promise<void>;
   getTransactionStatus(txHash: string): Promise<'PENDING' | 'CONFIRMED' | 'FAILED'>;
 }
 
@@ -135,6 +138,68 @@ export class BlockchainService implements IBlockchainService {
   /** GoQuorum is a zero-gas network; all txs must be sent with gasPrice 0. */
   private txOverrides(): ethers.Overrides {
     return { gasPrice: 0, type: 0 };
+  }
+
+  /**
+   * Verify the configured chain and contract are actually usable before serving traffic.
+   * Catches the common failure mode where the Quorum network is rebuilt and the
+   * previously deployed settlement contract no longer exists at the configured address.
+   */
+  async preflight(): Promise<void> {
+    if (this.mock) {
+      logger.warn('Blockchain preflight skipped - BLOCKCHAIN_MODE=mock');
+      return;
+    }
+
+    // 1. Chain reachable, and reporting the chain id we are configured for.
+    let onChainId: number;
+    try {
+      onChainId = Number((await this.provider.getNetwork()).chainId);
+    } catch (error: any) {
+      throw new AppError(
+        `Cannot reach the Quorum RPC at ${env.QUORUM_RPC_URL}: ${error.shortMessage || error.message}`,
+        503,
+        'CHAIN_UNREACHABLE',
+      );
+    }
+    if (onChainId !== env.QUORUM_CHAIN_ID) {
+      throw new AppError(
+        `Chain id mismatch: the node reports ${onChainId} but QUORUM_CHAIN_ID is ${env.QUORUM_CHAIN_ID}`,
+        500,
+        'CHAIN_ID_MISMATCH',
+      );
+    }
+
+    // 2. The settlement contract still exists at the configured address.
+    const code = await this.provider.getCode(env.VITTAGEM_CONTRACT_ADDRESS);
+    if (code === '0x') {
+      throw new AppError(
+        `No contract found at VITTAGEM_CONTRACT_ADDRESS ${env.VITTAGEM_CONTRACT_ADDRESS} on chain ${onChainId}. ` +
+          'If the Quorum network was rebuilt, redeploy the settlement contract and update VITTAGEM_CONTRACT_ADDRESS.',
+        500,
+        'SETTLEMENT_CONTRACT_MISSING',
+      );
+    }
+
+    // 3. The operator can act as treasury (agent/compliance roles are self-granted later).
+    let isTreasury = false;
+    try {
+      isTreasury = await this.contract.hasRole(await this.contract.TREASURY_ADMIN(), this.wallet.address);
+    } catch {
+      /* a read failure here is already covered by the bytecode check above */
+    }
+    if (!isTreasury) {
+      logger.warn(
+        `Operator ${this.wallet.address} does not hold TREASURY_ADMIN on ` +
+          `${env.VITTAGEM_CONTRACT_ADDRESS} - mints will be rejected until it is granted.`,
+      );
+    }
+
+    logger.info(
+      `Blockchain preflight OK - chain ${onChainId} via ${env.QUORUM_RPC_URL}, ` +
+        `settlement ${env.VITTAGEM_CONTRACT_ADDRESS}, operator ${this.wallet.address}` +
+        (isTreasury ? ' (TREASURY_ADMIN)' : ''),
+    );
   }
 
   /**
@@ -259,7 +324,10 @@ export class BlockchainService implements IBlockchainService {
    *          -> burn()                          -> CLOSED
    * Any already-advanced status is handled idempotently. Returns the burn tx hash.
    */
-  async closeSettlementForWithdrawal(referenceId: string): Promise<string> {
+  async closeSettlementForWithdrawal(
+    referenceId: string,
+    opts: { releaseWithdrawalHold?: boolean } = {},
+  ): Promise<string> {
     if (this.mock) return `0xmock_burn_tx_hash_${Date.now()}`;
 
     const sink = this.redemptionSink;
@@ -273,6 +341,12 @@ export class BlockchainService implements IBlockchainService {
     }
     if (s.status === 'CLOSED') {
       throw new AppError(`Settlement ${referenceId} is already closed`, 409, 'SETTLEMENT_CLOSED');
+    }
+    // A hold placed by the DAO withdrawal flow is ours to lift once the DAO approves.
+    // Any other hold (or a freeze) is a compliance action and must not be bypassed.
+    if (s.status === 'ON_HOLD' && opts.releaseWithdrawalHold) {
+      await this.releaseHold(referenceId);
+      s = await this.getSettlement(referenceId);
     }
     if (s.status === 'ON_HOLD' || s.status === 'FROZEN') {
       throw new AppError(`Settlement ${referenceId} is ${s.status}; resolve compliance first`, 409, 'SETTLEMENT_BLOCKED');
@@ -291,6 +365,43 @@ export class BlockchainService implements IBlockchainService {
 
     // Status is now PAYOUT_CONFIRMED (or was already) -> safe to burn.
     return this.burn(referenceId);
+  }
+
+  /**
+   * Lock a settlement on-chain while a withdrawal is being verified. `ON_HOLD`
+   * settlements cannot be transferred, so the funds cannot be spent twice.
+   */
+  async hold(referenceId: string, reason: string): Promise<string> {
+    logger.info(`HOLD ref=${referenceId} (${reason})`);
+    if (this.mock) return `0xmock_hold_tx_hash_${Date.now()}`;
+    try {
+      const tx = await this.contract.hold(referenceId, reason, this.txOverrides());
+      await tx.wait();
+      return tx.hash;
+    } catch (error: any) {
+      throw this.wrap('hold', error);
+    }
+  }
+
+  /**
+   * Lift a withdrawal hold, returning the settlement to MINTED so its owner can use it again.
+   * Returns null (no transaction) when the settlement is not on hold, so it is safe to call twice.
+   */
+  async releaseHold(referenceId: string): Promise<string | null> {
+    logger.info(`RELEASE ref=${referenceId}`);
+    if (this.mock) return `0xmock_release_tx_hash_${Date.now()}`;
+    const s = await this.getSettlement(referenceId);
+    if (s.status !== 'ON_HOLD') {
+      logger.warn(`Release skipped: settlement ${referenceId} is ${s.status}, not ON_HOLD`);
+      return null;
+    }
+    try {
+      const tx = await this.contract.release(referenceId, this.txOverrides());
+      await tx.wait();
+      return tx.hash;
+    } catch (error: any) {
+      throw this.wrap('release', error);
+    }
   }
 
   async getSettlement(referenceId: string): Promise<OnChainSettlement> {
@@ -337,7 +448,21 @@ export class BlockchainService implements IBlockchainService {
   }
 
   private wrap(op: string, error: any): AppError {
-    const reason = error?.reason || error?.shortMessage || error?.message || 'unknown error';
+    const reason =
+      error?.reason || error?.shortMessage || error?.info?.error?.message || error?.message || 'unknown error';
+
+    // GoQuorum rejects transactions from accounts absent from permission-config.json.
+    // Surface that distinctly - it is a network configuration problem, not a contract error.
+    if (/does not have permission/i.test(String(reason))) {
+      logger.error(`Blockchain ${op} rejected by network permissioning: ${reason}`);
+      return new AppError(
+        `Blockchain ${op} rejected: operator ${this.wallet.address} is not permissioned on this network. ` +
+          'Add it to permission-config.json (GoQuorum Permissioning v2) and restart the nodes.',
+        500,
+        'ACCOUNT_NOT_PERMISSIONED',
+      );
+    }
+
     logger.error(`Blockchain ${op} failed: ${reason}`, error);
     return new AppError(`Blockchain ${op} transaction failed: ${reason}`, 500, 'BLOCKCHAIN_ERROR');
   }

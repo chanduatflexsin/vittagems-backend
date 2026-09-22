@@ -13,7 +13,9 @@
     "db:generate": "prisma generate",
     "verify:onchain": "ts-node scripts/verify-onchain.ts",
     "e2e:api": "node scripts/e2e-api.mjs",
-    "demo:xpz": "node scripts/serve-demo.mjs"
+    "demo:xpz": "node scripts/serve-demo.mjs",
+    "e2e:dao": "node scripts/e2e-dao.mjs",
+    "e2e:wallets": "node scripts/e2e-wallet-docs.mjs"
   },
   "keywords": [],
   "author": "",

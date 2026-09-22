@@ -6,13 +6,14 @@ export class DepositController {
   static async registerDepositMock(req: Request, res: Response, next: NextFunction) {
     try {
       const clientId = (req as any).client.id;
-      const { amount, currency, referenceId } = req.body;
+      const { amount, currency, referenceId, proof } = req.body;
       
       const result = await DepositService.registerMockDeposit({
         clientId,
         amount,
         currency,
-        referenceId
+        referenceId,
+        proof,
       });
 
       sendSuccess(res, result, 201);

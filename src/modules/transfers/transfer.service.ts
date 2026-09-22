@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import { ValidationError, NotFoundError, ForbiddenError } from '../../utils/errors';
 import { transactionQueue } from '../../workers/transaction.worker';
+import { WalletService } from '../wallets/wallet.service';
 
 const prisma = new PrismaClient();
 
@@ -22,6 +23,10 @@ export class TransferService {
     if (!referenceId) {
       throw new ValidationError('referenceId (the settlement to transfer) is required');
     }
+
+    // Both sides of an internal transfer must be whitelisted.
+    await WalletService.assertActive(fromAddress, 'sending');
+    await WalletService.assertActive(toAddress, 'receiving');
 
     // 1. Validate that the client owns the fromAddress (or has permission to transfer from it)
     const account = await prisma.blockchainAccount.findFirst({

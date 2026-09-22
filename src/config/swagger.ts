@@ -34,6 +34,10 @@ const options = {
       { name: 'Mint', description: 'Issue on-chain settlement value against a verified deposit' },
       { name: 'Transfers', description: 'Move a settlement between approved partners' },
       { name: 'Withdrawals', description: 'Redeem a settlement to fiat and close it on-chain' },
+      { name: 'Proposals', description: 'DAO proposals for mint/burn/transfer (v2 settlement contracts)' },
+      { name: 'Wallets', description: 'Wallet whitelist: only approved addresses may hold settlement value' },
+      { name: 'Documents', description: 'Proof documents (bank statements, receipts) attached to deposits and payouts' },
+      { name: 'DAO', description: 'DAO verification: members review evidence and vote on deposits and withdrawals' },
     ],
     components: {
       securitySchemes: {
@@ -45,6 +49,13 @@ const options = {
         },
       },
       parameters: {
+        DaoToken: {
+          name: 'X-DAO-Token',
+          in: 'header',
+          required: true,
+          description: 'DAO member token from POST /dao/members (vg_dao_...).',
+          schema: { type: 'string' },
+        },
         IdempotencyKey: {
           name: 'Idempotency-Key',
           in: 'header',
@@ -107,11 +118,22 @@ const options = {
           required: ['amount', 'referenceId'],
           properties: {
             amount: { type: 'string', example: '1000.00' },
-            currency: { type: 'string', default: 'INR', example: 'INR' },
+            currency: { type: 'string', default: 'USD', example: 'USD' },
             referenceId: {
               type: 'string',
               description: 'Unique deposit reference; reused as the on-chain settlement key when minting.',
               example: 'DEP-2026-0001',
+            },
+            proof: {
+              type: 'object',
+              description: 'Required when DAO verification is enabled: the evidence DAO members check.',
+              required: ['bankReference'],
+              properties: {
+                bankReference: { type: 'string', example: 'UTR-ICIC-554201' },
+                payerName: { type: 'string', example: 'Alice Sharma' },
+                notes: { type: 'string', example: 'NEFT from ICICI a/c ending 4411' },
+                documentHash: { type: 'string', description: 'Optional hash of the bank statement/receipt' },
+              },
             },
           },
         },
@@ -177,6 +199,11 @@ const options = {
               type: 'string',
               description: 'The settlement to redeem/close on payout confirmation.',
               example: 'DEP-2026-0001',
+            },
+            windowMinutes: {
+              type: 'integer',
+              description: 'DAO mode: minutes allowed to pay out and get verified before funds are released (1-1440).',
+              example: 15,
             },
           },
         },

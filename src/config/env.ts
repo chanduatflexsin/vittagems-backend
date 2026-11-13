@@ -14,6 +14,14 @@ const envSchema = z.object({
   QUORUM_CHAIN_ID: z.string().transform(Number),
   VITTAGEM_CONTRACT_ADDRESS: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
   BLOCKCHAIN_PRIVATE_KEY: z.string().regex(/^0x[a-fA-F0-9]{64}$/),
+  KYC_ADMIN_API_KEY: z.string().min(32).optional(),
+  
+  KYC_CHAIN_ID: z.string().default('11155111').transform(Number),
+  KYC_COMPLIANCE_REGISTRY_ADDRESS: z
+    .string()
+    .regex(/^0x[a-fA-F0-9]{40}$/)
+    .default('0x134d59C974792C5bAC41F02E5860AA4F56c44107'),
+  KYC_ISSUER_PRIVATE_KEY: z.string().regex(/^0x[a-fA-F0-9]{64}$/).optional(),
 
   // ── Settlement chain integration ──────────────────────────────
   // 'live'  -> BlockchainService signs and broadcasts real transactions.

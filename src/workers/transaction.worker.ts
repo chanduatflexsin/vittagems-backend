@@ -1,10 +1,10 @@
-import { Queue, Worker, Job } from 'bullmq';
-import { PrismaClient } from '@prisma/client';
-import { blockchainService } from '../blockchain/BlockchainService';
-import { logger } from '../utils/logger';
-import { env } from '../config/env';
-import { WebhookService } from '../modules/webhooks/webhook.service';
-import { WalletService } from '../modules/wallets/wallet.service';
+import { Queue, Worker, Job } from "bullmq";
+import { PrismaClient } from "@prisma/client";
+import { blockchainService } from "../blockchain/BlockchainService";
+import { logger } from "../utils/logger";
+import { env } from "../config/env";
+import { WebhookService } from "../modules/webhooks/webhook.service";
+import { WalletService } from "../modules/wallets/wallet.service";
 
 const prisma = new PrismaClient();
 
@@ -13,9 +13,13 @@ const connection = {
 };
 
 // 1. Queue Definition
-export const transactionQueue = new Queue('blockchain-transactions', { connection });
+export const transactionQueue = new Queue("blockchain-transactions", {
+  connection,
+});
 
-type WorkerTx = NonNullable<Awaited<ReturnType<typeof prisma.transaction.findUnique>>>;
+type WorkerTx = NonNullable<
+  Awaited<ReturnType<typeof prisma.transaction.findUnique>>
+>;
 
 /**
  * Reflect the backend whitelist on-chain. Only ever called for an address that
@@ -23,107 +27,251 @@ type WorkerTx = NonNullable<Awaited<ReturnType<typeof prisma.transaction.findUni
  * partners stay a subset of the whitelist.
  */
 async function registerPartnerOnce(address: string, partnerName?: string) {
-  if (await blockchainService.isPartnerApproved(address)) return;
-  await blockchainService.registerPartner(address, partnerName || `partner-${address.slice(0, 10)}`);
+  if (await blockchainService.isPartnerApproved(address)) {
+    await blockchainService.ensurePartnerKyc(address);
+    return;
+  }
+  await blockchainService.registerPartner(
+    address,
+    partnerName || `partner-${address.slice(0, 10)}`,
+  );
+  await blockchainService.ensurePartnerKyc(address);
   await WalletService.markRegisteredOnChain(address);
 }
 
 const proposalEvent = (proposalId: string, type: string, message: string) =>
-  prisma.proposalEvent.create({ data: { proposalId, type, message, actor: 'chain' } });
+  prisma.proposalEvent.create({
+    data: { proposalId, type, message, actor: "chain" },
+  });
 
 /** Mirror a confirmed on-chain step of a DAO-verified flow back onto its proposal. */
-async function recordDaoOutcome(tx: WorkerTx, txHash: string | null) {
+async function recordDaoOutcome(
+  tx: WorkerTx,
+  txHash: string | null,
+  options: { continueBurnAfterRelease?: boolean } = {},
+) {
   const proposalId = tx.proposalId!;
-  if (tx.type === 'MINT') {
-    await prisma.proposal.update({ where: { id: proposalId }, data: { state: 'EXECUTED', executeTxHash: txHash } });
-    await proposalEvent(proposalId, 'EXECUTED', `Minted ${tx.amount} on-chain after DAO approval (tx ${txHash}).`);
-  } else if (tx.type === 'BURN') {
+  if (tx.type === "MINT") {
+    await prisma.proposal.update({
+      where: { id: proposalId },
+      data: { state: "EXECUTED", executeTxHash: txHash },
+    });
+    await proposalEvent(
+      proposalId,
+      "EXECUTED",
+      `Minted ${tx.amount} on-chain after DAO approval (tx ${txHash}).`,
+    );
+  } else if (tx.type === "BURN") {
     await prisma.proposal.update({
       where: { id: proposalId },
       data: {
-        state: 'EXECUTED',
+        state: "EXECUTED",
         executeTxHash: txHash,
-        resolutionMessage: 'Withdrawal complete: the payout was verified and the locked funds were burned on-chain.',
+        resolutionMessage:
+          "Withdrawal complete: the payout was verified and the locked funds were burned on-chain.",
       },
     });
-    await proposalEvent(proposalId, 'EXECUTED', `Burned ${tx.amount} on-chain after DAO approval (tx ${txHash}).`);
-  } else if (tx.type === 'LOCK') {
-    await prisma.proposal.update({ where: { id: proposalId }, data: { lockTxHash: txHash } });
+    await proposalEvent(
+      proposalId,
+      "EXECUTED",
+      `Burned ${tx.amount} on-chain after DAO approval (tx ${txHash}).`,
+    );
+  } else if (tx.type === "LOCK") {
+    await prisma.proposal.update({
+      where: { id: proposalId },
+      data: { lockTxHash: txHash },
+    });
     if (tx.withdrawalId) {
       await prisma.withdrawal.updateMany({
-        where: { id: tx.withdrawalId, status: 'LOCK_PENDING' },
-        data: { status: 'LOCKED' },
+        where: { id: tx.withdrawalId, status: "LOCK_PENDING" },
+        data: { status: "LOCKED" },
       });
     }
-    await proposalEvent(proposalId, 'LOCKED', `Funds locked on-chain (tx ${txHash}). Waiting for the payout reference.`);
-  } else if (tx.type === 'RELEASE') {
-    const current = await prisma.proposal.findUnique({ where: { id: proposalId }, select: { resolutionMessage: true } });
+    await proposalEvent(
+      proposalId,
+      "LOCKED",
+      `Funds locked on-chain (tx ${txHash}). Waiting for the payout reference.`,
+    );
+  } else if (tx.type === "RELEASE") {
+    const current = await prisma.proposal.findUnique({
+      where: { id: proposalId },
+      select: { resolutionMessage: true },
+    });
     await prisma.proposal.update({
       where: { id: proposalId },
       data: {
         releaseTxHash: txHash,
-        // The message was written when the release was queued; now it has happened.
-        resolutionMessage: current?.resolutionMessage?.replace(
-          'Your locked funds are being released back to you.',
-          'Your locked funds have been released back to you on-chain.',
-        ),
+        ...(!options.continueBurnAfterRelease && {
+          resolutionMessage: current?.resolutionMessage?.replace(
+            "Your locked funds are being released back to you.",
+            "Your locked funds have been released back to you on-chain.",
+          ),
+        }),
       },
     });
-    if (tx.withdrawalId) {
-      await prisma.withdrawal.update({ where: { id: tx.withdrawalId }, data: { status: 'RELEASED' } });
+    if (tx.withdrawalId && !options.continueBurnAfterRelease) {
+      await prisma.withdrawal.update({
+        where: { id: tx.withdrawalId },
+        data: { status: "RELEASED" },
+      });
     }
     await proposalEvent(
       proposalId,
-      'RELEASED',
-      txHash
-        ? `Locked funds released back to the client on-chain (tx ${txHash}).`
-        : 'Nothing to release on-chain: the settlement was no longer locked.',
+      options.continueBurnAfterRelease ? "HOLD_RELEASED" : "RELEASED",
+      options.continueBurnAfterRelease
+        ? txHash
+          ? `Withdrawal hold released on-chain (tx ${txHash}); proceeding to transfer and burn.`
+          : "Withdrawal hold was already released; proceeding to transfer and burn."
+        : txHash
+          ? `Locked funds released back to the client on-chain (tx ${txHash}).`
+          : "Nothing to release on-chain: the settlement was no longer locked.",
     );
+
+    if (options.continueBurnAfterRelease && tx.withdrawalId) {
+      const burnTx = await prisma.transaction.findFirst({
+        where: {
+          withdrawalId: tx.withdrawalId,
+          type: "BURN",
+          status: "AWAITING_APPROVAL",
+        },
+      });
+      if (!burnTx) {
+        const message = `Withdrawal hold was released, but the pending burn transaction is missing for withdrawal ${tx.withdrawalId}.`;
+        logger.error(message);
+        await prisma.withdrawal.update({
+          where: { id: tx.withdrawalId },
+          data: { status: "RELEASED" },
+        });
+        await prisma.proposal.update({
+          where: { id: proposalId },
+          data: { failureReason: message, resolutionMessage: message },
+        });
+        await proposalEvent(proposalId, "FAILED", message);
+        return;
+      }
+      await prisma.transaction.update({
+        where: { id: burnTx.id },
+        data: { status: "PENDING" },
+      });
+      await transactionQueue.add("process-burn", {
+        transactionId: burnTx.id,
+        amount: burnTx.amount.toString(),
+        referenceId: burnTx.referenceId,
+      });
+    }
   }
 }
 
 /** Surface a failed on-chain step of a DAO-verified flow on its proposal. */
 async function recordDaoFailure(tx: WorkerTx, reason: string) {
   const proposalId = tx.proposalId!;
-  await prisma.proposal.update({ where: { id: proposalId }, data: { failureReason: reason } });
-  await proposalEvent(proposalId, 'FAILED', `${tx.type} failed on-chain: ${reason}`);
+  await prisma.proposal.update({
+    where: { id: proposalId },
+    data: { failureReason: reason },
+  });
+  await proposalEvent(
+    proposalId,
+    "FAILED",
+    `${tx.type} failed on-chain: ${reason}`,
+  );
 
   // If the funds could not even be locked, the withdrawal never started: close it out.
-  if (tx.type === 'LOCK' && tx.withdrawalId) {
+  if (tx.type === "LOCK" && tx.withdrawalId) {
     const message = `Withdrawal could not start: the funds could not be locked on-chain (${reason}).`;
-    await prisma.withdrawal.update({ where: { id: tx.withdrawalId }, data: { status: 'FAILED' } });
+    await prisma.withdrawal.update({
+      where: { id: tx.withdrawalId },
+      data: { status: "FAILED" },
+    });
     await prisma.proposal.updateMany({
-      where: { id: proposalId, state: 'PENDING' },
-      data: { state: 'REJECTED', resolutionMessage: message, resolvedAt: new Date() },
+      where: { id: proposalId, state: "PENDING" },
+      data: {
+        state: "REJECTED",
+        resolutionMessage: message,
+        resolvedAt: new Date(),
+      },
     });
     await prisma.transaction.updateMany({
-      where: { withdrawalId: tx.withdrawalId, type: 'BURN', status: 'AWAITING_APPROVAL' },
-      data: { status: 'FAILED', failureReason: message },
+      where: {
+        withdrawalId: tx.withdrawalId,
+        type: "BURN",
+        status: "AWAITING_APPROVAL",
+      },
+      data: { status: "FAILED", failureReason: message },
     });
   }
-  if (tx.type === 'BURN' && tx.withdrawalId) {
-    await prisma.withdrawal.update({ where: { id: tx.withdrawalId }, data: { status: 'FAILED' } });
+  if (tx.type === "BURN" && tx.withdrawalId) {
+    const confirmedRelease = await prisma.transaction.findFirst({
+      where: {
+        withdrawalId: tx.withdrawalId,
+        type: "RELEASE",
+        status: "CONFIRMED",
+      },
+    });
+    let fundsReleased = Boolean(confirmedRelease);
+    if (!fundsReleased && tx.referenceId) {
+      try {
+        const settlement = await blockchainService.getSettlement(
+          tx.referenceId,
+        );
+        fundsReleased = settlement.exists && settlement.status === "MINTED";
+      } catch (error) {
+        logger.warn(
+          `Could not reconcile settlement ${tx.referenceId} after burn failure: ${(error as Error).message}`,
+        );
+      }
+    }
+    const message = fundsReleased
+      ? `The withdrawal hold was released on-chain${confirmedRelease?.blockchainTxHash ? ` (tx ${confirmedRelease.blockchainTxHash})` : ""}, but settlement transfer/burn failed: ${reason}. The settlement remains with the partner.`
+      : reason;
+    await prisma.withdrawal.update({
+      where: { id: tx.withdrawalId },
+      data: { status: fundsReleased ? "RELEASED" : "FAILED" },
+    });
+    if (fundsReleased) {
+      await prisma.proposal.update({
+        where: { id: proposalId },
+        data: { resolutionMessage: message },
+      });
+    }
+  }
+  if (tx.type === "RELEASE" && tx.withdrawalId) {
+    await prisma.withdrawal.update({
+      where: { id: tx.withdrawalId },
+      data: { status: "FAILED" },
+    });
   }
 }
 
 // 2. Worker Definition
 const processJob = async (job: Job) => {
-  const { transactionId, toAddress, amount, referenceId, corridor, partnerName, releaseWithdrawalHold } = job.data;
+  const {
+    transactionId,
+    toAddress,
+    amount,
+    referenceId,
+    corridor,
+    partnerName,
+    continueBurnAfterRelease,
+  } = job.data;
 
   logger.info(`Processing blockchain job ${job.name} for tx ${transactionId}`);
 
   // Fetch the transaction to ensure it's still pending
-  const tx = await prisma.transaction.findUnique({ where: { id: transactionId } });
+  const tx = await prisma.transaction.findUnique({
+    where: { id: transactionId },
+  });
 
-  if (!tx || tx.status !== 'PENDING') {
-    logger.warn(`Transaction ${transactionId} is no longer pending (status: ${tx?.status})`);
+  if (!tx || tx.status !== "PENDING") {
+    logger.warn(
+      `Transaction ${transactionId} is no longer pending (status: ${tx?.status})`,
+    );
     return;
   }
 
   // Mark as submitted
   await prisma.transaction.update({
     where: { id: transactionId },
-    data: { status: 'SUBMITTED' },
+    data: { status: "SUBMITTED" },
   });
 
   try {
@@ -134,40 +282,56 @@ const processJob = async (job: Job) => {
 
     // Dispatch based on type. The deployed VittaGemsSettlement contract is keyed
     // by referenceId, so every settlement operation must carry one.
-    if (tx.type === 'MINT') {
+    if (tx.type === "MINT") {
       // Re-check at signing time: a wallet revoked while this job sat in the queue
       // must not be minted to.
-      await WalletService.assertActive(toAddress, 'destination');
+      await WalletService.assertActive(toAddress, "destination");
       await registerPartnerOnce(toAddress, partnerName);
-      txHash = await blockchainService.mint(referenceId, toAddress, amount, corridor || 'DEFAULT');
-    } else if (tx.type === 'TRANSFER') {
-      await WalletService.assertActive(toAddress, 'receiving');
+      txHash = await blockchainService.mint(
+        referenceId,
+        toAddress,
+        amount,
+        corridor || "DEFAULT",
+      );
+    } else if (tx.type === "TRANSFER") {
+      await WalletService.assertActive(toAddress, "receiving");
       await registerPartnerOnce(toAddress, partnerName);
       txHash = await blockchainService.transfer(referenceId, toAddress, amount);
-    } else if (tx.type === 'BURN') {
+    } else if (tx.type === "BURN") {
       // A withdrawal burn fires only after the off-chain fiat payout is confirmed.
       // The contract can't burn a MINTED settlement directly, so this walks it
       // through transfer -> reconcile -> burn (see closeSettlementForWithdrawal).
-      txHash = releaseWithdrawalHold
-        ? await blockchainService.closeSettlementForWithdrawal(referenceId, { releaseWithdrawalHold: true })
-        : await blockchainService.closeSettlementForWithdrawal(referenceId);
-    } else if (tx.type === 'LOCK') {
+      txHash =
+        await blockchainService.closeSettlementForWithdrawal(referenceId);
+    } else if (tx.type === "LOCK") {
       // DAO withdrawal: prove the settlement is withdrawable by this wallet, then freeze it
       // so it cannot be moved while the off-chain payout is being verified.
       const settlement = await blockchainService.getSettlement(referenceId);
       if (!settlement.exists) {
         throw new Error(`Settlement ${referenceId} does not exist on-chain`);
       }
-      if (!['MINTED', 'TRANSFERRED', 'PAYOUT_CONFIRMED'].includes(settlement.status)) {
-        throw new Error(`Settlement ${referenceId} is ${settlement.status} and cannot be withdrawn`);
+      if (
+        !["MINTED", "TRANSFERRED", "PAYOUT_CONFIRMED"].includes(
+          settlement.status,
+        )
+      ) {
+        throw new Error(
+          `Settlement ${referenceId} is ${settlement.status} and cannot be withdrawn`,
+        );
       }
-      if (tx.fromAddress && settlement.partner.toLowerCase() !== tx.fromAddress.toLowerCase()) {
+      if (
+        tx.fromAddress &&
+        settlement.partner.toLowerCase() !== tx.fromAddress.toLowerCase()
+      ) {
         throw new Error(
           `Settlement ${referenceId} is held by ${settlement.partner}, not by the withdrawing wallet ${tx.fromAddress}`,
         );
       }
-      txHash = await blockchainService.hold(referenceId, `withdrawal ${tx.withdrawalId} pending DAO verification`);
-    } else if (tx.type === 'RELEASE') {
+      txHash = await blockchainService.hold(
+        referenceId,
+        `withdrawal ${tx.withdrawalId} pending DAO verification`,
+      );
+    } else if (tx.type === "RELEASE") {
       // DAO rejected or the window expired: give the funds back.
       txHash = await blockchainService.releaseHold(referenceId);
     } else {
@@ -175,7 +339,9 @@ const processJob = async (job: Job) => {
     }
 
     // Wait for confirmation (simplified)
-    const status = txHash ? await blockchainService.getTransactionStatus(txHash) : 'CONFIRMED';
+    const status = txHash
+      ? await blockchainService.getTransactionStatus(txHash)
+      : "CONFIRMED";
 
     // Update the database
     await prisma.transaction.update({
@@ -187,15 +353,15 @@ const processJob = async (job: Job) => {
     });
 
     // A confirmed withdrawal burn closes the settlement — mark the withdrawal SETTLED.
-    if (tx.type === 'BURN' && tx.withdrawalId && status === 'CONFIRMED') {
+    if (tx.type === "BURN" && tx.withdrawalId && status === "CONFIRMED") {
       await prisma.withdrawal.update({
         where: { id: tx.withdrawalId },
-        data: { status: 'SETTLED' },
+        data: { status: "SETTLED" },
       });
     }
 
-    if (tx.proposalId && status === 'CONFIRMED') {
-      await recordDaoOutcome(tx, txHash);
+    if (tx.proposalId && status === "CONFIRMED") {
+      await recordDaoOutcome(tx, txHash, { continueBurnAfterRelease });
     }
 
     // Publish a webhook event
@@ -204,46 +370,59 @@ const processJob = async (job: Job) => {
       transactionId: tx.id,
       amount: tx.amount,
       status,
-      blockchainTxHash: txHash
+      blockchainTxHash: txHash,
     });
 
-    logger.info(`Transaction ${transactionId} completed with hash ${txHash} and status ${status}`);
+    logger.info(
+      `Transaction ${transactionId} completed with hash ${txHash} and status ${status}`,
+    );
   } catch (error: any) {
     logger.error(`Blockchain job failed for tx ${transactionId}`, error);
 
     await prisma.transaction.update({
       where: { id: transactionId },
       data: {
-        status: 'FAILED',
-        failureReason: error.message || 'Blockchain error',
+        status: "FAILED",
+        failureReason: error.message || "Blockchain error",
       },
     });
 
     if (tx.proposalId) {
-      await recordDaoFailure(tx, error.message || 'Blockchain error').catch((e) =>
-        logger.error(`Could not record DAO failure for tx ${transactionId}: ${e.message}`),
+      await recordDaoFailure(tx, error.message || "Blockchain error").catch(
+        (e) =>
+          logger.error(
+            `Could not record DAO failure for tx ${transactionId}: ${e.message}`,
+          ),
       );
     }
 
     // Publish a webhook event for failure
-    await WebhookService.dispatch(tx.clientId, `${tx.type.toLowerCase()}.failed`, {
-      transactionId: tx.id,
-      error: error.message || 'Blockchain error'
-    });
+    await WebhookService.dispatch(
+      tx.clientId,
+      `${tx.type.toLowerCase()}.failed`,
+      {
+        transactionId: tx.id,
+        error: error.message || "Blockchain error",
+      },
+    );
 
     throw error; // Let BullMQ handle retries if configured
   }
 };
 
-export const transactionWorker = new Worker('blockchain-transactions', processJob, { 
-  connection,
-  concurrency: 5 // Process 5 transactions concurrently
-});
+export const transactionWorker = new Worker(
+  "blockchain-transactions",
+  processJob,
+  {
+    connection,
+    concurrency: 1, // Strictly 1: sequential on-chain transactions to eliminate nonce collisions and gaps
+  },
+);
 
-transactionWorker.on('completed', (job) => {
+transactionWorker.on("completed", (job) => {
   logger.debug(`Job ${job.id} has completed!`);
 });
 
-transactionWorker.on('failed', (job, err) => {
+transactionWorker.on("failed", (job, err) => {
   logger.error(`Job ${job?.id} has failed with ${err.message}`);
 });

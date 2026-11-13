@@ -25,7 +25,7 @@ const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 
 /* ── state ─────────────────────────────────────────────────────────────── */
 const defaultState = () => ({
-  config: { baseUrl: 'https://settlement.vittagems.com/api/v1', apiKey: '', wallet: '', clientId: '', company: 'XPZ Corp' },
+  config: { baseUrl: 'http://localhost:3000/api/v1', apiKey: '', wallet: '', clientId: '', company: 'XPZ Corp' },
   invoices: [],     // {id, ref, customer, amount, currency, corridor, utr, payer, status, txId, txHash, verification, error, createdAt}
   payouts: [],      // {id, ref, toAddress, amount, status, txId, txHash, error, createdAt}
   withdrawals: [],  // {id, ref, amount, bank, status, verification, lockTxHash, releaseTxHash, burnTxHash, message, error, createdAt}
@@ -75,10 +75,11 @@ const invoiceByRef = (ref) => state.invoices.find((i) => i.ref === ref);
 const myWallet = () => live.wallets.find((w) => w.address?.toLowerCase() === state.config.wallet?.toLowerCase()) || null;
 
 /* ── API client ────────────────────────────────────────────────────────── */
-async function api(method, path, { body, idem, auth = true, dao, quiet = false } = {}) {
+async function api(method, path, { body, idem, auth = true, dao, adminKey, quiet = false } = {}) {
   const url = state.config.baseUrl.replace(/\/$/, '') + path;
   const headers = { 'Content-Type': 'application/json' };
   if (dao) headers['X-DAO-Token'] = dao;
+  else if (adminKey) headers.Authorization = `Bearer ${adminKey}`;
   else if (auth && state.config.apiKey) headers.Authorization = `Bearer ${state.config.apiKey}`;
   if (idem) headers['Idempotency-Key'] = idem;
   const t0 = performance.now();
@@ -332,6 +333,8 @@ function applyWithdrawalStatus(w, d) {
   w.verification = d.verification || null;
   w.lockTxHash = d.lockTxHash ?? w.lockTxHash;
   w.releaseTxHash = d.releaseTxHash ?? w.releaseTxHash;
+  w.releaseTxStatus = d.releaseTransactionStatus ?? w.releaseTxStatus;
+  w.fundsReleased = d.fundsReleased ?? w.fundsReleased;
   if (d.status === 'SETTLED') w.burnTxHash = d.blockchainTxHash;
   w.message = d.message ?? w.message;
   w.error = d.failureReason || null;
@@ -349,7 +352,7 @@ function applyWithdrawalStatus(w, d) {
       BURN_PENDING: [`DAO verified the payout for ${w.ref} — burning the locked funds`, 'ok'],
       SETTLED: [`Withdrawal for ${w.ref} complete: locked funds burned on-chain`, 'ok'],
       RELEASE_PENDING: [w.message || `Withdrawal for ${w.ref} was not verified — releasing funds`, 'warn'],
-      RELEASED: [w.message || `Withdrawal for ${w.ref} not finished — funds released back`, 'warn'],
+      RELEASED: [w.message || `Withdrawal for ${w.ref} not finished — funds released back`, w.error ? 'bad' : 'warn'],
       FAILED: [w.error || `Withdrawal for ${w.ref} failed`, 'bad'],
     };
     if (msgs[w.status]) toast(...msgs[w.status]);
@@ -834,6 +837,12 @@ function renderSettings() {
     f.baseUrl.value = state.config.baseUrl; f.apiKey.value = state.config.apiKey; f.clientId.value = state.config.clientId || ''; f.wallet.value = state.config.wallet || '';
   });
   guarded('#form-onboard', () => { $('#form-onboard').company.value = state.config.company || 'XPZ Corp'; });
+  guarded('#form-kyc', () => {
+    if ($('#form-kyc').validUntil.value) return;
+    const date = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
+    date.setMinutes(date.getMinutes() - date.getTimezoneOffset());
+    $('#form-kyc').validUntil.value = date.toISOString().slice(0, 16);
+  });
 }
 
 function renderSettingsMembers() {
@@ -964,6 +973,50 @@ $('#btn-test-conn').addEventListener('click', async () => {
   await checkHealth();
   if (!state.config.apiKey) return toast('API online. Onboard to get an API key.', 'warn');
   try { const r = await api('GET', '/client'); toast(`Authenticated as ${r.data.name} (${r.data.BlockchainAccounts?.length || 0} wallet)`, 'ok'); } catch (e) { toast(e.message, 'bad'); }
+});
+$('#form-kyc').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const f = e.target;
+  const address = f.address.value.trim();
+  const validUntil = Math.floor(new Date(f.validUntil.value).getTime() / 1000);
+  const adminKey = f.adminKey.value.trim();
+  try {
+    const result = await api('POST', `/admin/partners/${encodeURIComponent(address)}/kyc`, {
+      adminKey,
+      body: { validUntil, claimsHash: f.claimsHash.value.trim() },
+    });
+    $('#kyc-status').textContent = `Verified ${result.data.account}; transaction ${result.data.txHash}; valid until ${new Date(validUntil * 1000).toLocaleString()}.`;
+    toast('Partner KYC attestation confirmed', 'ok');
+  } catch (error) {
+    $('#kyc-status').textContent = error.message;
+    toast(error.message, 'bad');
+  }
+});
+$('#btn-kyc-status').addEventListener('click', async () => {
+  const f = $('#form-kyc');
+  const address = f.address.value.trim();
+  try {
+    const result = await api('GET', `/admin/partners/${encodeURIComponent(address)}/kyc`, { adminKey: f.adminKey.value.trim() });
+    const identity = result.data;
+    const expiry = identity.validUntil === '0' ? 'not set' : new Date(Number(identity.validUntil) * 1000).toLocaleString();
+    $('#kyc-status').textContent = `Verified: ${identity.isVerified ? 'yes' : 'no'}; valid until: ${expiry}; claims hash: ${identity.claimsHash}.`;
+  } catch (error) {
+    $('#kyc-status').textContent = error.message;
+    toast(error.message, 'bad');
+  }
+});
+$('#btn-kyc-revoke').addEventListener('click', async () => {
+  const f = $('#form-kyc');
+  const address = f.address.value.trim();
+  if (!address || !confirm(`Revoke KYC for ${address}?`)) return;
+  try {
+    const result = await api('DELETE', `/admin/partners/${encodeURIComponent(address)}/kyc`, { adminKey: f.adminKey.value.trim() });
+    $('#kyc-status').textContent = `KYC revoked for ${result.data.account}; transaction ${result.data.txHash}.`;
+    toast('Partner KYC revoked', 'ok');
+  } catch (error) {
+    $('#kyc-status').textContent = error.message;
+    toast(error.message, 'bad');
+  }
 });
 $('#btn-reset').addEventListener('click', async () => {
   if (!confirm('Clear all XPZ demo data (invoices, payouts, withdrawals, API key, DAO members)?')) return;

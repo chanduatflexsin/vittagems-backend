@@ -26,6 +26,30 @@ cp .env.example .env
 ```
 Ensure that `API_KEY_SECRET` and `JWT_SECRET` are set to secure random strings.
 
+### Partner KYC (Sepolia)
+
+Set `KYC_ADMIN_API_KEY` to a private random value of at least 32 characters and
+configure `QUORUM_RPC_URL` for Sepolia. The registry address defaults to the deployed
+`0x134d59C974792C5bAC41F02E5860AA4F56c44107`; `KYC_CHAIN_ID` defaults to `11155111`.
+The KYC issuer uses `KYC_ISSUER_PRIVATE_KEY` when set, otherwise the existing
+`BLOCKCHAIN_PRIVATE_KEY`. Grant that wallet `CLAIM_ISSUER_ROLE` from the registry's
+admin before submitting attestations. If the KYC admin key is unset, these endpoints
+fail closed with a service-unavailable response.
+
+Use the dedicated admin key as `Authorization: Bearer <KYC_ADMIN_API_KEY>`:
+
+```http
+POST /api/v1/admin/partners/0x.../kyc
+Content-Type: application/json
+
+{"validUntil": 1794000000, "claimsHash": "0x<64 hex characters>"}
+```
+
+`claimsHash` should be the hash of off-chain KYC evidence; do not send or store
+identity documents on-chain. `GET` on the same path reads the current attestation,
+and `DELETE` revokes it. The XPZ demo portal's Connection page includes a form to
+exercise these endpoints. Never expose the admin key in a public or untrusted frontend.
+
 ### Run via Docker (Database & Redis)
 
 Start the required infrastructure (PostgreSQL & Redis):

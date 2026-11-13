@@ -11,6 +11,7 @@ const app = express();
 app.use(helmet());
 app.use(cors());
 app.set('trust proxy', 1);
+
 // Rate limiting
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes

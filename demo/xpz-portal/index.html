@@ -271,6 +271,23 @@
             </div>
           </form>
         </div>
+
+        <div class="card">
+          <h3>Admin partner KYC</h3>
+          <p class="muted">Use the dedicated KYC admin key to attest or revoke a partner on the configured registry. Evidence remains off-chain; submit its 32-byte hash.</p>
+          <form id="form-kyc" class="form-col">
+            <label>KYC admin API key <input name="adminKey" type="password" autocomplete="new-password" minlength="32" required /></label>
+            <label>Partner wallet <input name="address" placeholder="0x…" pattern="^0x[a-fA-F0-9]{40}$" required /></label>
+            <label>Attestation valid until <input name="validUntil" type="datetime-local" required /></label>
+            <label>Off-chain evidence SHA-256 hash <input name="claimsHash" placeholder="0x + 64 hex characters" pattern="^0x[a-fA-F0-9]{64}$" required /></label>
+            <div class="actions">
+              <button class="btn primary" type="submit">Verify partner</button>
+              <button class="btn" type="button" id="btn-kyc-status">Check status</button>
+              <button class="btn danger" type="button" id="btn-kyc-revoke">Revoke KYC</button>
+            </div>
+          </form>
+          <div id="kyc-status" class="muted" role="status" aria-live="polite"></div>
+        </div>
       </div>
     </section>
   </main>

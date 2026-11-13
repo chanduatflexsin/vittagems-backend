@@ -289,7 +289,7 @@ export class SettlementV2Service {
       throw this.wrap('executeMint', error);
     }
   }
-
+                                    
   async executeBurn(proposalId: string): Promise<string> {
     logger.info(`v2 executeBurn proposal=${proposalId}`);
     if (this.mock) return `0xmock_execute_burn_${Date.now()}`;

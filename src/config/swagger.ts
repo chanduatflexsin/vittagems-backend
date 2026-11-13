@@ -38,9 +38,16 @@ const options = {
       { name: 'Wallets', description: 'Wallet whitelist: only approved addresses may hold settlement value' },
       { name: 'Documents', description: 'Proof documents (bank statements, receipts) attached to deposits and payouts' },
       { name: 'DAO', description: 'DAO verification: members review evidence and vote on deposits and withdrawals' },
+      { name: 'KYC Admin', description: 'Admin-only partner identity attestations on the KYC compliance registry' },
     ],
     components: {
       securitySchemes: {
+        kycAdminAuth: {
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'KYC_ADMIN_API_KEY',
+          description: 'Dedicated KYC administrator credential; separate from client API keys.',
+        },
         bearerAuth: {
           type: 'http',
           scheme: 'bearer',

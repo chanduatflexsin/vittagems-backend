@@ -1,0 +1,2142 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>VittaGems Settlement Docs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap">
+
+<style>
+/* ── tokens ─────────────────────────────────────────────────────────── */
+:root{
+  --ground:#F5F7F5; --surface:#FFFFFF; --surface-2:#EFF2EF;
+  --ink:#151F1D; --ink-2:#394744; --muted:#647471; --line:#DDE3DF; --line-2:#C9D2CE;
+  --accent:#0B6E5F; --accent-ink:#075347; --accent-soft:#E2EFEB;
+  --copper:#A25C2C;
+  --ok:#2F7A3E; --ok-soft:#E5F1E6;
+  --warn:#8E5E0C; --warn-soft:#F6EEDC;
+  --bad:#A5342A; --bad-soft:#F6E6E3;
+  --code-bg:#12211E; --code-ink:#DCE7E3; --code-muted:#7F958F;
+  --code-str:#9ED3A8; --code-num:#E4B473; --code-kw:#6FC5B0;
+  --shadow:0 1px 2px rgba(20,35,32,.05), 0 8px 24px -12px rgba(20,35,32,.18);
+  --radius:10px;
+  --sans:"Source Sans 3",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  --display:"Archivo","Source Sans 3",-apple-system,"Segoe UI",sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --ground:#0D1413; --surface:#141D1B; --surface-2:#1A2523;
+    --ink:#E7EDEA; --ink-2:#BCC9C5; --muted:#8B9B97; --line:#25302D; --line-2:#334240;
+    --accent:#54C6AB; --accent-ink:#7FD9C3; --accent-soft:#16302B;
+    --copper:#D89660;
+    --ok:#6DBE7C; --ok-soft:#16281A;
+    --warn:#D6A54E; --warn-soft:#2A2213;
+    --bad:#E08277; --bad-soft:#2C1917;
+    --code-bg:#0A100F; --code-ink:#D5E2DE;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.6);
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#0D1413; --surface:#141D1B; --surface-2:#1A2523;
+  --ink:#E7EDEA; --ink-2:#BCC9C5; --muted:#8B9B97; --line:#25302D; --line-2:#334240;
+  --accent:#54C6AB; --accent-ink:#7FD9C3; --accent-soft:#16302B;
+  --copper:#D89660;
+  --ok:#6DBE7C; --ok-soft:#16281A;
+  --warn:#D6A54E; --warn-soft:#2A2213;
+  --bad:#E08277; --bad-soft:#2C1917;
+  --code-bg:#0A100F; --code-ink:#D5E2DE;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.6);
+}
+
+*{box-sizing:border-box}
+/* Author-level, so it still beats rules like `.navgroup a{display:block}`
+   when the nav filter or a tab panel toggles `el.hidden`. */
+[hidden]{display:none!important}
+img{max-width:100%}
+body{
+  margin:0; background:var(--ground); color:var(--ink);
+  font-family:var(--sans); font-size:16px; line-height:1.65;
+  -webkit-font-smoothing:antialiased;
+}
+a{color:var(--accent); text-decoration:none}
+a:hover{text-decoration:underline}
+:focus-visible{outline:2px solid var(--accent); outline-offset:2px; border-radius:4px}
+
+/* ── header ─────────────────────────────────────────────────────────── */
+.topbar{
+  position:sticky; top:env(safe-area-inset-top,0px); z-index:40;
+  background:color-mix(in srgb, var(--ground) 88%, transparent);
+  backdrop-filter:blur(10px);
+  border-bottom:1px solid var(--line);
+  display:flex; align-items:center; gap:12px;
+  padding:0 20px; height:58px;
+}
+.brand{display:flex; align-items:center; gap:10px; font-family:var(--display); font-weight:700; font-size:16px; letter-spacing:-.01em; color:var(--ink)}
+.brand:hover{text-decoration:none}
+.gem{width:22px; height:22px; flex:none}
+.brand small{
+  font-family:var(--sans); font-weight:600; font-size:11px; letter-spacing:.09em;
+  text-transform:uppercase; color:var(--muted); border-left:1px solid var(--line-2);
+  padding-left:10px; margin-left:2px;
+}
+.topbar .spacer{flex:1}
+.envpick{
+  display:flex; align-items:center; gap:7px; font-size:12px; color:var(--muted);
+  font-family:var(--display); font-weight:600; letter-spacing:.06em; text-transform:uppercase;
+}
+.envpick select{
+  font-family:var(--mono); font-size:12px; text-transform:none; letter-spacing:0;
+  color:var(--ink); background:var(--surface); border:1px solid var(--line);
+  border-radius:7px; padding:5px 8px; cursor:pointer;
+}
+.iconbtn{
+  background:var(--surface); border:1px solid var(--line); color:var(--ink-2);
+  width:34px; height:34px; border-radius:8px; display:grid; place-items:center;
+  cursor:pointer; flex:none;
+}
+.iconbtn:hover{border-color:var(--line-2); color:var(--ink)}
+.menubtn{display:none}
+
+/* ── shell ──────────────────────────────────────────────────────────── */
+.shell{
+  display:grid; grid-template-columns:262px minmax(0,1fr) 224px;
+  gap:40px; max-width:1440px; margin:0 auto; padding:0 24px;
+  align-items:start;
+}
+.sidebar{
+  position:sticky; top:calc(58px + env(safe-area-inset-top,0px));
+  height:calc(100vh - 58px); overflow-y:auto;
+  padding:24px 8px 64px 0; font-size:14.5px;
+}
+.search{position:relative; margin-bottom:18px}
+.search input{
+  width:100%; font:inherit; font-size:14px; color:var(--ink);
+  background:var(--surface); border:1px solid var(--line); border-radius:8px;
+  padding:8px 10px 8px 32px;
+}
+.search input::placeholder{color:var(--muted)}
+.search svg{position:absolute; left:10px; top:11px; color:var(--muted)}
+.navgroup{margin-bottom:22px}
+.navgroup h4{
+  font-family:var(--display); font-size:11px; font-weight:600; letter-spacing:.11em;
+  text-transform:uppercase; color:var(--muted); margin:0 0 8px 12px;
+}
+.navgroup a{
+  display:block; padding:5px 12px; border-radius:7px; color:var(--ink-2);
+  border-left:2px solid transparent; margin-left:-2px;
+}
+.navgroup a:hover{background:var(--surface-2); text-decoration:none; color:var(--ink)}
+.navgroup a.on{
+  background:var(--accent-soft); color:var(--accent-ink); font-weight:600;
+  border-left-color:var(--accent);
+}
+.navempty{color:var(--muted); font-size:13.5px; padding:4px 12px}
+
+main{padding:38px 0 120px; min-width:0}
+.toc{
+  position:sticky; top:calc(58px + env(safe-area-inset-top,0px));
+  padding:38px 0 64px; font-size:13.5px; max-height:calc(100vh - 58px); overflow-y:auto;
+}
+.toc h5{
+  font-family:var(--display); font-size:11px; font-weight:600; letter-spacing:.11em;
+  text-transform:uppercase; color:var(--muted); margin:0 0 10px;
+}
+.toc a{display:block; padding:4px 0 4px 12px; border-left:2px solid var(--line); color:var(--muted)}
+.toc a:hover{color:var(--ink); text-decoration:none}
+.toc a.on{color:var(--accent-ink); border-left-color:var(--accent); font-weight:600}
+
+/* ── page content ───────────────────────────────────────────────────── */
+.page{max-width:780px}
+.eyebrow{
+  font-family:var(--display); font-size:11px; font-weight:600; letter-spacing:.12em;
+  text-transform:uppercase; color:var(--copper); margin:0 0 8px;
+}
+h1{
+  font-family:var(--display); font-weight:700; font-size:40px; line-height:1.12;
+  letter-spacing:-.022em; margin:0 0 14px; text-wrap:balance;
+}
+h2{
+  font-family:var(--display); font-weight:600; font-size:24px; line-height:1.25;
+  letter-spacing:-.014em; margin:48px 0 12px; text-wrap:balance;
+  scroll-margin-top:80px;
+}
+h3{
+  font-family:var(--display); font-weight:600; font-size:17px; letter-spacing:-.008em;
+  margin:32px 0 8px; scroll-margin-top:80px;
+}
+.lede{font-size:19px; line-height:1.55; color:var(--ink-2); margin:0 0 4px}
+p{margin:0 0 14px}
+ul,ol{margin:0 0 16px; padding-left:22px}
+li{margin-bottom:6px}
+li>ul,li>ol{margin-top:6px}
+strong{font-weight:600; color:var(--ink)}
+hr{border:0; border-top:1px solid var(--line); margin:44px 0}
+
+code{
+  font-family:var(--mono); font-size:.86em;
+  background:var(--surface-2); border:1px solid var(--line);
+  padding:.1em .38em; border-radius:5px; color:var(--ink);
+  word-break:break-word;
+}
+a code{color:var(--accent-ink)}
+
+/* ── code blocks ────────────────────────────────────────────────────── */
+.code{
+  position:relative; margin:0 0 18px; border-radius:var(--radius);
+  background:var(--code-bg); border:1px solid #23332F; overflow:hidden;
+}
+.code .bar{
+  display:flex; align-items:center; gap:10px;
+  padding:7px 10px 7px 14px; border-bottom:1px solid #23332F;
+}
+.code .lang{
+  font-family:var(--mono); font-size:11px; letter-spacing:.06em;
+  text-transform:uppercase; color:var(--code-muted);
+}
+.code .bar .spacer{flex:1}
+.copy{
+  font-family:var(--sans); font-size:12px; font-weight:600; color:var(--code-muted);
+  background:transparent; border:1px solid #2C3F3A; border-radius:6px;
+  padding:3px 9px; cursor:pointer;
+}
+.copy:hover{color:var(--code-ink); border-color:#41564F}
+.copy.done{color:var(--code-str); border-color:#2F5A3C}
+.code pre{
+  margin:0; padding:14px; overflow-x:auto;
+  font-family:var(--mono); font-size:13px; line-height:1.62; color:var(--code-ink);
+}
+.code pre code{background:none; border:0; padding:0; font-size:13px; color:inherit}
+.tk-com{color:var(--code-muted); font-style:italic}
+.tk-str{color:var(--code-str)}
+.tk-num{color:var(--code-num)}
+.tk-kw{color:var(--code-kw)}
+.tk-key{color:#8FC7E8}
+
+/* ── tables ─────────────────────────────────────────────────────────── */
+.tablewrap{overflow-x:auto; margin:0 0 18px; border:1px solid var(--line); border-radius:var(--radius); background:var(--surface)}
+table{border-collapse:collapse; width:100%; font-size:14.5px; min-width:480px; font-variant-numeric:tabular-nums}
+th{
+  text-align:left; font-family:var(--display); font-weight:600; font-size:12px;
+  letter-spacing:.06em; text-transform:uppercase; color:var(--muted);
+  padding:10px 14px; border-bottom:1px solid var(--line); white-space:nowrap;
+}
+td{padding:10px 14px; border-bottom:1px solid var(--line); vertical-align:top}
+tbody tr:last-child td{border-bottom:0}
+td code{font-size:12.5px; white-space:nowrap}
+
+/* ── callouts ───────────────────────────────────────────────────────── */
+.note{
+  border:1px solid var(--line); border-left:3px solid var(--accent);
+  background:var(--surface); border-radius:8px; padding:14px 16px; margin:0 0 18px;
+}
+.note.warn{border-left-color:var(--warn); background:var(--warn-soft)}
+.note.bad{border-left-color:var(--bad); background:var(--bad-soft)}
+.note p:last-child{margin-bottom:0}
+.note .h{
+  font-family:var(--display); font-weight:600; font-size:12px; letter-spacing:.08em;
+  text-transform:uppercase; color:var(--muted); display:block; margin-bottom:5px;
+}
+.note.warn .h{color:var(--warn)}
+.note.bad .h{color:var(--bad)}
+
+/* ── pills ──────────────────────────────────────────────────────────── */
+.m{
+  font-family:var(--mono); font-size:11px; font-weight:500; letter-spacing:.04em;
+  padding:2px 6px; border-radius:4px; display:inline-block;
+}
+.m-get{background:var(--accent-soft); color:var(--accent-ink)}
+.m-post{background:var(--warn-soft); color:var(--warn)}
+.pill{
+  font-family:var(--mono); font-size:11.5px; padding:2px 8px; border-radius:99px;
+  border:1px solid var(--line-2); color:var(--ink-2); display:inline-block;
+  white-space:nowrap;
+}
+.pill.ok{background:var(--ok-soft); color:var(--ok); border-color:transparent}
+.pill.warn{background:var(--warn-soft); color:var(--warn); border-color:transparent}
+.pill.bad{background:var(--bad-soft); color:var(--bad); border-color:transparent}
+.pill.acc{background:var(--accent-soft); color:var(--accent-ink); border-color:transparent}
+
+/* ── tabs ───────────────────────────────────────────────────────────── */
+.tabs{border-bottom:1px solid var(--line); display:flex; gap:4px; margin:0 0 20px; overflow-x:auto}
+.tabs button{
+  font-family:var(--sans); font-size:14.5px; font-weight:600; color:var(--muted);
+  background:none; border:0; border-bottom:2px solid transparent;
+  padding:8px 12px; margin-bottom:-1px; cursor:pointer; white-space:nowrap;
+}
+.tabs button:hover{color:var(--ink)}
+.tabs button.on{color:var(--accent-ink); border-bottom-color:var(--accent)}
+
+/* ── cards ──────────────────────────────────────────────────────────── */
+.cards{display:grid; grid-template-columns:repeat(auto-fit,minmax(215px,1fr)); gap:14px; margin:0 0 20px}
+.card{
+  background:var(--surface); border:1px solid var(--line); border-radius:var(--radius);
+  padding:16px; display:flex; flex-direction:column; gap:5px;
+}
+.card .k{
+  font-family:var(--display); font-size:11px; font-weight:600; letter-spacing:.1em;
+  text-transform:uppercase; color:var(--copper);
+}
+.card h4{font-family:var(--display); font-weight:600; font-size:15.5px; margin:0}
+.card p{font-size:14px; color:var(--ink-2); margin:0}
+.card a{font-size:14px; font-weight:600; margin-top:auto; padding-top:6px}
+
+/* ── numbered rail (real sequences only) ────────────────────────────── */
+.rail{list-style:none; margin:0 0 20px; padding:0; border-left:2px solid var(--line)}
+.rail li{position:relative; padding:0 0 18px 22px; margin:0}
+.rail li::before{
+  content:""; position:absolute; left:-7px; top:7px; width:12px; height:12px;
+  border-radius:99px; background:var(--surface); border:2px solid var(--accent);
+}
+.rail li:last-child{padding-bottom:0}
+.rail .s{font-family:var(--display); font-weight:600; font-size:15px; display:block; margin-bottom:2px}
+.rail .d{font-size:14.5px; color:var(--ink-2)}
+
+.kv{display:grid; grid-template-columns:auto 1fr; gap:6px 16px; font-size:14.5px; margin:0 0 18px}
+.kv dt{font-family:var(--mono); font-size:13px; color:var(--muted); white-space:nowrap}
+.kv dd{margin:0}
+
+.pagenav{
+  display:flex; gap:12px; justify-content:space-between; margin-top:64px;
+  padding-top:22px; border-top:1px solid var(--line); flex-wrap:wrap;
+}
+.pagenav a{
+  flex:1 1 180px; border:1px solid var(--line); border-radius:var(--radius);
+  background:var(--surface); padding:12px 16px; color:var(--ink);
+}
+.pagenav a:hover{border-color:var(--accent); text-decoration:none}
+.pagenav span{display:block; font-size:11px; letter-spacing:.09em; text-transform:uppercase; color:var(--muted); font-family:var(--display); font-weight:600}
+.pagenav b{font-family:var(--display); font-weight:600; font-size:15px}
+.pagenav .nx{text-align:right}
+
+/* ── responsive ─────────────────────────────────────────────────────── */
+@media (max-width:1140px){
+  .shell{grid-template-columns:240px minmax(0,1fr); gap:32px}
+  .toc{display:none}
+}
+@media (max-width:980px){ .envpick .lbl{display:none} }
+@media (max-width:860px){
+  .shell{grid-template-columns:minmax(0,1fr); padding:0 16px}
+  .menubtn{display:grid}
+  .brand small{display:none}
+  .sidebar{
+    position:fixed; inset:calc(58px + env(safe-area-inset-top,0px)) auto 0 0;
+    width:280px; max-width:86vw; background:var(--surface);
+    border-right:1px solid var(--line); padding:20px 14px 60px; z-index:39;
+    box-shadow:var(--shadow); height:auto;
+  }
+  h1{font-size:31px}
+  h2{font-size:21px}
+  .lede{font-size:17px}
+  main{padding:28px 0 90px}
+}
+@media (prefers-reduced-motion:reduce){ *{animation:none!important; transition:none!important} }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <button class="iconbtn menubtn" id="menubtn" aria-label="Toggle navigation" aria-expanded="false">
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 4h12M2 8h12M2 12h12"/></svg>
+  </button>
+  <a class="brand" href="#/introduction">
+    <svg class="gem" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M7 3h10l4 6-9 12L3 9z" stroke="var(--accent)" stroke-width="1.6" stroke-linejoin="round"/>
+      <path d="M3 9h18M8.5 9 12 21M15.5 9 12 21M7 3l1.5 6M17 3l-1.5 6" stroke="var(--accent)" stroke-width="1.1" opacity=".55"/>
+    </svg>
+    VittaGems <small>Settlement API</small>
+  </a>
+  <div class="spacer"></div>
+  <label class="envpick"><span class="lbl">Base URL</span>
+    <select id="envsel" aria-label="API environment">
+      <option value="sandbox">Sandbox</option>
+      <option value="production">Production</option>
+      <option value="local">Local</option>
+    </select>
+  </label>
+  <button class="iconbtn" id="themebtn" aria-label="Switch colour theme">
+    <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M13.2 9.6A5.6 5.6 0 0 1 6.4 2.8 5.6 5.6 0 1 0 13.2 9.6z"/></svg>
+  </button>
+</header>
+
+<div class="shell">
+  <nav class="sidebar" id="sidebar" aria-label="Documentation">
+    <div class="search">
+      <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 14 14"/></svg>
+      <input id="navsearch" type="search" placeholder="Filter pages" aria-label="Filter pages">
+    </div>
+    <div id="navlist"></div>
+    <p class="navempty" id="navempty" hidden>No page matches that.</p>
+  </nav>
+
+  <main id="main"></main>
+
+  <aside class="toc" id="toc" aria-label="On this page"></aside>
+</div>
+
+<script>
+/* ════════════════════════════════════════════════════════════════════
+   VittaGems Settlement API — integration guide
+   Audience: a developer at a company that has signed up with VittaGems.
+   {{BASE}} in any page body is replaced with the selected environment.
+   ════════════════════════════════════════════════════════════════════ */
+
+const ENVS = {
+  sandbox:    'https://sandbox.vittagems.com/api/v1',
+  production: 'https://api.vittagems.com/api/v1',
+  local:      'http://localhost:3000/api/v1',
+};
+
+const PAGES = {
+
+/* ───────────────────────────── GET STARTED ─────────────────────────── */
+
+'introduction': { group:'Get Started', title:'Introduction', eyebrow:'Introduction', h1:'Settle fiat, on-chain',
+  body:`
+<p class="lede">VittaGems is a settlement rail for business-to-business fiat payments. You keep your
+own customers, invoices and bank accounts. When money actually moves, you tell us — and we turn that
+into a verified, auditable record on a private blockchain.</p>
+
+<p>You do not need to know anything about blockchains to use this API. There are no wallets to fund,
+no gas to pay, no transactions to sign. Three REST calls cover the whole rail.</p>
+
+<div class="cards">
+  <div class="card">
+    <span class="k">Money in</span>
+    <h4>Record &amp; mint</h4>
+    <p>A customer paid you. Record the payment with its bank reference, attach proof, and settlement
+    value is created against it.</p>
+    <a href="#/accepting-payments">How it works →</a>
+  </div>
+  <div class="card">
+    <span class="k">Money moves</span>
+    <h4>Transfer</h4>
+    <p>Hand a settlement to another VittaGems business. Instant, and neither side touches a bank.</p>
+    <a href="#/paying-partners">How it works →</a>
+  </div>
+  <div class="card">
+    <span class="k">Money out</span>
+    <h4>Redeem &amp; close</h4>
+    <p>Lock a settlement, pay your customer from your own bank, and the settlement closes once that
+    payout is verified.</p>
+    <a href="#/cashing-out">How it works →</a>
+  </div>
+</div>
+
+<h2 id="model">How to think about it</h2>
+
+<h3>A settlement is a record, not a balance</h3>
+<p>There is no account to top up and no balance to draw down. Each settlement is a separate record
+identified by a <strong>reference you choose</strong> — usually your own invoice or payment number.
+Every later operation names that same reference, so your books and our ledger cannot drift apart.</p>
+
+<p>The practical consequence: settlements move whole. There is no partial transfer and no partial
+redemption. If you expect to redeem $10,000 of a $25,000 payment separately, record them as separate
+settlements from the start.</p>
+
+<h3>Nothing settles inside the request</h3>
+<p>Write operations return <code>202 Accepted</code> with a transaction id, and the work completes in
+the background. <strong>202 means accepted, not settled.</strong> You poll for the final status.</p>
+
+<h3>Evidence is required, not optional</h3>
+<p>Every settlement is checked by independent verifiers before value moves. They read the bank
+reference you supply and any documents you attach. Good evidence clears in minutes; a bare reference
+with no supporting document invites questions. See <a href="#/verification">How verification
+works</a>.</p>
+
+<h2 id="before">What you need before you write code</h2>
+<ul>
+  <li>An <strong>API key</strong>, issued when your account is approved</li>
+  <li>A <strong>settlement wallet address</strong> that we have whitelisted</li>
+</ul>
+<p>Both come out of onboarding, which takes one form and a compliance review.</p>
+
+<div class="cards">
+  <div class="card"><span class="k">Step 1</span><h4>Get an account</h4>
+    <p>What the signup form asks for, and what you get back.</p><a href="#/onboarding">Onboarding →</a></div>
+  <div class="card"><span class="k">Step 2</span><h4>First settlement</h4>
+    <p>Money in and confirmed, in four calls.</p><a href="#/quickstart">Quick start →</a></div>
+  <div class="card"><span class="k">Reference</span><h4>Every endpoint</h4>
+    <p>Request shapes, scopes and headers.</p><a href="#/api-reference">API reference →</a></div>
+</div>
+
+<h2 id="conventions">Conventions used throughout</h2>
+<div class="tablewrap"><table>
+<thead><tr><th>Thing</th><th>Convention</th></tr></thead>
+<tbody>
+<tr><td>Base URL</td><td><code>{{BASE}}</code> — switch environments in the header</td></tr>
+<tr><td>Auth</td><td><code>Authorization: Bearer &lt;your api key&gt;</code></td></tr>
+<tr><td>Amounts</td><td>Decimal <strong>strings</strong> — <code>"25000.00"</code>, never a JSON number</td></tr>
+<tr><td>Currency</td><td><strong>USD</strong></td></tr>
+<tr><td>Timestamps</td><td>ISO 8601, UTC</td></tr>
+<tr><td>Ids</td><td>Opaque strings. Store them; never parse them.</td></tr>
+</tbody></table></div>
+`},
+
+'onboarding': { group:'Get Started', title:'Onboarding', eyebrow:'Get Started', h1:'Getting an account',
+  body:`
+<p class="lede">You cannot self-serve an API key. Access starts with a short form on the VittaGems
+website, followed by a compliance review — because the rail settles real money between named
+businesses.</p>
+
+<p>Budget <strong>one to three business days</strong> from submitting the form to having working
+credentials. Everything after that is self-service.</p>
+
+<h2 id="form">1. Fill in the signup form</h2>
+<p>Apply at <a href="https://vittagems.com/get-started">vittagems.com/get-started</a>. Five things
+are asked for, and each one has a direct consequence for your integration:</p>
+
+<div class="tablewrap"><table>
+<thead><tr><th>Field</th><th>Why it is asked</th></tr></thead>
+<tbody>
+<tr><td><strong>Legal business name</strong></td><td>Appears on every settlement you create, and is what verifiers see when reviewing your evidence.</td></tr>
+<tr><td><strong>Technical contact email</strong></td><td>Where credentials are sent. Use a shared inbox your team controls, not a personal address — you will need it again for key rotation.</td></tr>
+<tr><td><strong>Settlement wallet address</strong></td><td>The address that will hold your settlements. See <a href="#wallet">below</a> — this is the field people get wrong.</td></tr>
+<tr><td><strong>Operations you need</strong></td><td>Becomes your API key's scopes. Ask only for what you will use; adding more later is a support request, not a security incident.</td></tr>
+<tr><td><strong>Business &amp; compliance details</strong></td><td>Registration number, jurisdiction, expected volumes, and the banks you will settle through. This is what the review is actually reviewing.</td></tr>
+</tbody></table></div>
+
+<h3 id="wallet">About the settlement wallet address</h3>
+<p>A 42-character hex address starting <code>0x</code>. Settlements you create are recorded as held by
+this address.</p>
+
+<div class="note bad"><span class="h">We never ask for a private key — and never will</span>
+<p>Only the address. Anyone asking you for a private key, seed phrase or keystore file in the name of
+VittaGems is attempting fraud, whatever the email looks like. You keep your key; the API never needs
+it, because you never sign anything.</p></div>
+
+<p>If you do not have an address yet, generate one and keep the key somewhere you control:</p>
+
+<div class="code" data-lang="js"><pre><code>// Node: npm i ethers
+import { Wallet } from 'ethers';
+
+const wallet = Wallet.createRandom();
+console.log('Address (give this to VittaGems):', wallet.address);
+console.log('Private key (keep secret, never send):', wallet.privateKey);</code></pre></div>
+
+<p>Store the private key in your secrets manager, not in the repository. You will not need it for any
+call in this documentation — it matters only if you later choose to hold or move settlements
+yourself.</p>
+
+<h3>Choosing operations</h3>
+<div class="tablewrap"><table>
+<thead><tr><th>Ask for this</th><th>If you need to</th><th>Scope you get</th></tr></thead>
+<tbody>
+<tr><td>Accept payments</td><td>Record incoming fiat and mint settlements</td><td><code>MINT</code></td></tr>
+<tr><td>Pay partners</td><td>Move settlements to other VittaGems businesses</td><td><code>TRANSFER</code></td></tr>
+<tr><td>Cash out</td><td>Redeem settlements back to fiat</td><td><code>WITHDRAW</code>, <code>WITHDRAW_STATUS</code></td></tr>
+<tr><td>Read status</td><td>Poll any transaction — you want this</td><td><code>TRANSACTION_READ</code></td></tr>
+</tbody></table></div>
+
+<h2 id="review">2. We review</h2>
+<p>Two things are checked in parallel:</p>
+
+<ul class="rail">
+  <li><span class="s">Your business</span><span class="d">Standard KYB against the details on the form.</span></li>
+  <li><span class="s">Your wallet address</span><span class="d">Screened and put to independent reviewers. It starts <span class="pill warn">PENDING</span> and must reach <span class="pill ok">ACTIVE</span> before it can hold anything.</span></li>
+</ul>
+
+<p>If the wallet is refused you get the reason in writing, and you can submit a corrected address
+without reapplying from scratch. See <a href="#/wallets">Your settlement wallet</a>.</p>
+
+<h2 id="credentials">3. You receive credentials</h2>
+<p>On approval, the technical contact receives:</p>
+
+<div class="code" data-lang="json"><pre><code>{
+  "clientId": "c7f1a0d2-5b3e-4a19-9c02-1f7b5e8d3a44",
+  "name": "Northwind Trading LLC",
+  "apiKey": "vg_live_9f2c4b18e7a03d5c...8ad1",
+  "permissions": ["MINT", "TRANSFER", "WITHDRAW", "WITHDRAW_STATUS", "TRANSACTION_READ"],
+  "blockchainAddress": "0x0133F71677B3de040CA09c63F285DE5EDD3912Be"
+}</code></pre></div>
+
+<div class="note bad"><span class="h">The API key is shown once</span>
+<p>Only a hash is stored on our side, so it genuinely cannot be shown to you again — a lost key means
+issuing a new one. Put it straight into your secrets manager.</p></div>
+
+<h2 id="confirm">4. Confirm you are live</h2>
+<p>Two calls, before you write anything else. First, that the key works:</p>
+
+<div class="code" data-lang="bash"><pre><code>curl {{BASE}}/client \\
+  -H "Authorization: Bearer $VG_API_KEY"</code></pre></div>
+
+<p>Then, that the wallet is ready — this is the one that catches people out:</p>
+
+<div class="code" data-lang="bash"><pre><code>curl {{BASE}}/wallets \\
+  -H "Authorization: Bearer $VG_API_KEY"</code></pre></div>
+
+<div class="code" data-lang="json"><pre><code>{
+  "success": true,
+  "data": [
+    {
+      "walletId": "w_3f81c0...",
+      "address": "0x0133f71677b3de040ca09c63f285de5edd3912be",
+      "label": "Northwind Trading LLC settlement wallet",
+      "status": "ACTIVE",
+      "decidedAt": "2026-09-22T11:04:19.220Z"
+    }
+  ]
+}</code></pre></div>
+
+<p><strong><code>status</code> must read <code>ACTIVE</code>.</strong> While it says
+<code>PENDING</code>, your key authenticates fine but every mint, transfer and withdrawal is refused
+with <code>WALLET_NOT_WHITELISTED</code>. That combination — a working key and a failing mint — is the
+single most common false alarm in a first integration.</p>
+
+<h2 id="envs">Sandbox and production</h2>
+<p>You get two sets of credentials. Sandbox behaves identically and settles against a test network,
+so nothing you do there touches real money.</p>
+
+<div class="tablewrap"><table>
+<thead><tr><th>Environment</th><th>Base URL</th><th>Key prefix</th></tr></thead>
+<tbody>
+<tr><td>Sandbox</td><td><code>{{SANDBOX}}</code></td><td><code>vg_test_</code></td></tr>
+<tr><td>Production</td><td><code>{{PROD}}</code></td><td><code>vg_live_</code></td></tr>
+</tbody></table></div>
+
+<p>Keys are not interchangeable: a sandbox key on production fails authentication, which is the
+intended behaviour. Build and test against sandbox, then change two values.</p>
+
+<h2 id="support">Getting unstuck</h2>
+<p>Include your <code>clientId</code> and, where relevant, the <code>transactionId</code> or
+<code>referenceId</code> — with those we can trace a call precisely. Never send your API key, to us or
+to anyone else.</p>
+`},
+
+'quickstart': { group:'Get Started', title:'Quick start', eyebrow:'Get Started', h1:'Quick start',
+  body:`
+<p class="lede">Your first settlement: record a payment you received, mint against it, and watch it
+confirm. Four calls.</p>
+
+<p>You need an API key and an <code>ACTIVE</code> wallet — see <a href="#/onboarding">onboarding</a>.
+Set them once:</p>
+
+<div class="code" data-lang="bash"><pre><code>export VG_API_KEY="vg_test_9f2c4b18e7a03d5c...8ad1"
+export VG_WALLET="0x0133F71677B3de040CA09c63F285DE5EDD3912Be"</code></pre></div>
+
+<h2 id="path">Pick your approach</h2>
+
+<div class="tabs" data-tabs="qs">
+  <button data-tab="curl" class="on">cURL</button>
+  <button data-tab="node">Node.js</button>
+  <button data-tab="python">Python</button>
+</div>
+
+<div data-panel="qs-curl">
+  <div class="tablewrap"><table>
+  <thead><tr><th>Best for</th><th>Effort</th><th>Then read</th></tr></thead>
+  <tbody><tr><td>Trying the rail, smoke tests in CI</td><td>Minutes</td><td><a href="#/api-reference">API reference</a></td></tr></tbody>
+  </table></div>
+  <p>Plain JSON over HTTPS with a bearer token. No SDK required, and none exists yet.</p>
+</div>
+
+<div data-panel="qs-node" hidden>
+  <div class="tablewrap"><table>
+  <thead><tr><th>Best for</th><th>Effort</th><th>Then read</th></tr></thead>
+  <tbody><tr><td>Production integrations</td><td>An afternoon</td><td><a href="#/accepting-payments">Accepting payments</a></td></tr></tbody>
+  </table></div>
+  <p>The wrapper below is the whole client: it sets auth, raises on the error envelope, and returns
+  <code>data</code> directly.</p>
+
+  <div class="code" data-lang="js"><pre><code>const BASE = '{{BASE}}';
+
+export async function vg(method, path, { body, idempotencyKey } = {}) {
+  const headers = {
+    'Content-Type': 'application/json',
+    Authorization: \`Bearer \${process.env.VG_API_KEY}\`,
+  };
+  if (idempotencyKey) headers['Idempotency-Key'] = idempotencyKey;
+
+  const res = await fetch(BASE + path, {
+    method, headers, body: body ? JSON.stringify(body) : undefined,
+  });
+  const json = await res.json();
+
+  // Every response carries success + data | error, so check that, not the status.
+  if (!json.success) {
+    const err = new Error(json.error.message);
+    err.code = json.error.code;
+    err.status = res.status;
+    throw err;
+  }
+  return json.data;
+}</code></pre></div>
+</div>
+
+<div data-panel="qs-python" hidden>
+  <div class="tablewrap"><table>
+  <thead><tr><th>Best for</th><th>Effort</th><th>Then read</th></tr></thead>
+  <tbody><tr><td>Back-office and reconciliation jobs</td><td>An afternoon</td><td><a href="#/accepting-payments">Accepting payments</a></td></tr></tbody>
+  </table></div>
+
+  <div class="code" data-lang="python"><pre><code>import os, requests
+
+BASE = "{{BASE}}"
+
+class VittaGemsError(Exception):
+    def __init__(self, code, message):
+        super().__init__(f"{code}: {message}")
+        self.code = code
+
+def vg(method, path, body=None, idempotency_key=None):
+    headers = {"Authorization": f"Bearer {os.environ['VG_API_KEY']}"}
+    if idempotency_key:
+        headers["Idempotency-Key"] = idempotency_key
+
+    res = requests.request(method, BASE + path, json=body, headers=headers, timeout=30)
+    payload = res.json()
+    if not payload.get("success"):
+        err = payload.get("error", {})
+        raise VittaGemsError(err.get("code", "UNKNOWN"), err.get("message", res.text))
+    return payload["data"]</code></pre></div>
+</div>
+
+<h2 id="step1">1. Record the payment you received</h2>
+<p>This is the moment your bank confirmed money landed. The <code>referenceId</code> is yours to
+choose and becomes the settlement's permanent key — use your invoice number.</p>
+
+<div class="code" data-lang="bash"><pre><code>curl -X POST {{BASE}}/deposits \\
+  -H "Authorization: Bearer $VG_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "amount": "25000.00",
+    "currency": "USD",
+    "referenceId": "INV-1042",
+    "proof": {
+      "bankReference": "UTR-CHAS-889201",
+      "payerName": "Contoso Manufacturing Inc",
+      "notes": "Wire received 09:12 ET"
+    }
+  }'</code></pre></div>
+
+<div class="code" data-lang="json"><pre><code>{
+  "success": true,
+  "data": {
+    "depositId": "d_9c4f21ab...",
+    "referenceId": "INV-1042",
+    "status": "PENDING_VERIFICATION",
+    "verification": { "state": "PENDING", "quorumRequired": 2, "expiresAt": "2026-09-23T10:14:02.881Z" }
+  }
+}</code></pre></div>
+
+<h2 id="step2">2. Attach your proof</h2>
+<p>Optional, and it is what gets you verified quickly. The file goes up as the raw request body —
+no multipart form, no base64.</p>
+
+<div class="code" data-lang="bash"><pre><code>curl -X POST {{BASE}}/deposits/d_9c4f21ab.../documents \\
+  -H "Authorization: Bearer $VG_API_KEY" \\
+  -H "Content-Type: application/pdf" \\
+  -H "X-File-Name: wire-confirmation.pdf" \\
+  --data-binary @wire-confirmation.pdf</code></pre></div>
+
+<h2 id="step3">3. Mint against the deposit</h2>
+<p>Needs an <code>Idempotency-Key</code> header of at least ten characters. Derive it from the
+business event so a retry is safe — see <a href="#/idempotency">idempotency</a>.</p>
+
+<div class="code" data-lang="bash"><pre><code>curl -X POST {{BASE}}/mint \\
+  -H "Authorization: Bearer $VG_API_KEY" \\
+  -H "Idempotency-Key: mint-INV-1042-01" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "referenceId": "INV-1042",
+    "toAddress": "'"$VG_WALLET"'",
+    "amount": "25000.00"
+  }'</code></pre></div>
+
+<div class="code" data-lang="json"><pre><code>{
+  "success": true,
+  "data": {
+    "transactionId": "t_3b90c6e1...",
+    "status": "AWAITING_APPROVAL",
+    "message": "Mint request recorded. It will execute once the deposit is verified."
+  }
+}</code></pre></div>
+
+<p><code>AWAITING_APPROVAL</code> is expected: the mint is held until the deposit is verified, then
+released automatically. Nothing further is required from you.</p>
+
+<h2 id="step4">4. Wait for it to confirm</h2>
+<div class="code" data-lang="bash"><pre><code>curl {{BASE}}/mint/t_3b90c6e1... \\
+  -H "Authorization: Bearer $VG_API_KEY"</code></pre></div>
+
+<p>In code, poll rather than guess:</p>
+
+<div class="code" data-lang="js"><pre><code>// Settlement is asynchronous: AWAITING_APPROVAL -> PENDING -> SUBMITTED -> CONFIRMED
+async function waitForSettlement(transactionId, { timeoutMs = 120_000 } = {}) {
+  const deadline = Date.now() + timeoutMs;
+
+  while (Date.now() < deadline) {
+    const tx = await vg('GET', \`/mint/\${transactionId}\`);
+    if (tx.status === 'CONFIRMED') return tx;
+    if (tx.status === 'FAILED') throw new Error(tx.errorMessage ?? 'Settlement failed');
+    await new Promise((r) => setTimeout(r, 2000));
+  }
+  // Not an error: verification windows are measured in minutes, not seconds.
+  throw new Error('Still pending — keep polling or check back later');
+}</code></pre></div>
+
+<div class="note"><span class="h">Do not block a user on this</span>
+<p>Verification takes minutes, occasionally longer if a reviewer has a question. Poll from a
+background job and update your own records when the status changes — never inside a request a
+customer is waiting on.</p></div>
+
+<h2 id="next">Next</h2>
+<ul>
+  <li><a href="#/accepting-payments">Accepting payments</a> — the full money-in flow, including rejections</li>
+  <li><a href="#/cashing-out">Cashing out</a> — redeeming a settlement back to fiat</li>
+  <li><a href="#/errors">Errors &amp; retries</a> — every code and what to do about it</li>
+  <li><a href="#/go-live">Before you go live</a> — the checklist we ask you to pass</li>
+</ul>
+`},
+
+/* ───────────────────────────── USING THE API ───────────────────────── */
+
+'authentication': { group:'Using the API', title:'Authentication', eyebrow:'Using the API', h1:'Authentication',
+  body:`
+<p class="lede">One credential: your API key, sent as a bearer token on every call.</p>
+
+<div class="code" data-lang="bash"><pre><code>curl {{BASE}}/client \\
+  -H "Authorization: Bearer vg_live_9f2c4b18e7a03d5c...8ad1"</code></pre></div>
+
+<h2 id="handling">Handling your key</h2>
+<p>The key identifies your business and authorises money movement. It is shown once at approval, and
+only a hash is stored on our side.</p>
+
+<ul>
+  <li><strong>Server-side only.</strong> Never ship it to a browser, a mobile app, or anything a
+  customer can open the developer tools on. There is no publishable key — every key in this system is
+  a secret key.</li>
+  <li><strong>Secrets manager, not <code>.env</code> in git.</strong> The usual rules, with the usual
+  consequences if ignored.</li>
+  <li><strong>Separate keys per environment.</strong> Sandbox keys start <code>vg_test_</code>,
+  production keys <code>vg_live_</code>. Using one on the other fails, deliberately.</li>
+  <li><strong>Rotate on suspicion.</strong> Contact support and a replacement is issued; the old key
+  is revoked and stops working immediately, so deploy the new one first.</li>
+</ul>
+
+<h2 id="scopes">Scopes</h2>
+<p>Your key carries only the operations you asked for at onboarding. A call outside them returns
+<code>403</code> naming what is missing.</p>
+
+<div class="tablewrap"><table>
+<thead><tr><th>Scope</th><th>Lets you</th></tr></thead>
+<tbody>
+<tr><td><code>MINT</code></td><td>Mint settlement value against a verified deposit</td></tr>
+<tr><td><code>TRANSFER</code></td><td>Move a settlement to another business</td></tr>
+<tr><td><code>WITHDRAW</code></td><td>Request a withdrawal, submit payout proof, request an extension</td></tr>
+<tr><td><code>WITHDRAW_STATUS</code></td><td>Read withdrawal status</td></tr>
+<tr><td><code>TRANSACTION_READ</code></td><td>Read mint and transfer status</td></tr>
+</tbody></table></div>
+
+<p>Recording a deposit, uploading documents and listing wallets need no scope beyond a valid key.</p>
+
+<h2 id="failures">When authentication fails</h2>
+<div class="tablewrap"><table>
+<thead><tr><th>Response</th><th>Meaning</th><th>Do</th></tr></thead>
+<tbody>
+<tr><td><code>401 UNAUTHORIZED</code></td><td>Header missing or malformed</td><td>Check it reads <code>Bearer &lt;key&gt;</code> — one space, no quotes</td></tr>
+<tr><td><code>401 UNAUTHORIZED</code></td><td>Key unknown, revoked or expired</td><td>Confirm the environment matches the key prefix; request a new key if it was rotated</td></tr>
+<tr><td><code>403 ACCESS_DENIED</code></td><td>Key is valid but lacks a scope</td><td>Ask support to add it</td></tr>
+<tr><td><code>403 ACCESS_DENIED</code></td><td>Your account is suspended</td><td>Contact support — this is an account matter, not a code one</td></tr>
+<tr><td><code>403 WALLET_NOT_WHITELISTED</code></td><td>Authentication succeeded; the <em>address</em> is not approved</td><td>See <a href="#/wallets">your settlement wallet</a></td></tr>
+</tbody></table></div>
+
+<div class="note warn"><span class="h">Valid key, failing mint</span>
+<p>Almost always the last row. A key that authenticates says nothing about whether your wallet is
+approved — those are separate checks, and a fresh account passes the first long before the second.</p></div>
+
+<h2 id="transport">Transport</h2>
+<p>HTTPS only. A plain HTTP request is refused rather than redirected, so a misconfigured client fails
+loudly instead of putting your key on the wire in clear text.</p>
+`},
+
+'wallets': { group:'Using the API', title:'Your settlement wallet', eyebrow:'Using the API', h1:'Your settlement wallet',
+  body:`
+<p class="lede">Settlements are held at an address you nominate. Nothing can be minted to, transferred
+to, or redeemed from an address that has not been approved.</p>
+
+<h2 id="why">Why the approval exists</h2>
+<p>An address is where value ends up. Approving one is a compliance decision — it is screened and
+reviewed independently, the same way a new payee is reviewed at a bank. The check is separate from
+your API key, so it is possible (and normal, on day one) to be fully authenticated and still blocked.</p>
+
+<h2 id="states">States</h2>
+<div class="tablewrap"><table>
+<thead><tr><th>Status</th><th>Meaning</th><th>Usable</th></tr></thead>
+<tbody>
+<tr><td><span class="pill warn">PENDING</span></td><td>Submitted, under review</td><td>No</td></tr>
+<tr><td><span class="pill ok">ACTIVE</span></td><td>Approved</td><td>Yes</td></tr>
+<tr><td><span class="pill bad">REJECTED</span></td><td>Refused at review, with a reason</td><td>No</td></tr>
+<tr><td><span class="pill bad">REVOKED</span></td><td>Was approved, withdrawn with a reason</td><td>No</td></tr>
+</tbody></table></div>
+
+<div class="code" data-lang="bash"><pre><code>curl {{BASE}}/wallets -H "Authorization: Bearer $VG_API_KEY"</code></pre></div>
+
+<h2 id="adding">Adding another wallet</h2>
+<p>You may use more than one — a treasury address separate from an operating one, for example. Each
+is reviewed on its own.</p>
+
+<div class="code" data-lang="bash"><pre><code>curl -X POST {{BASE}}/wallets \\
+  -H "Authorization: Bearer $VG_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "address": "0x9A12Bc44Ef7810dD2b3c5901Fa76Ee4432187C0d",
+    "label": "Treasury sweep wallet"
+  }'</code></pre></div>
+
+<p><code>label</code> is required, and it is not busywork — it is what a reviewer reads to decide.
+"Treasury sweep wallet" is approved without discussion; an unlabelled address generates questions.</p>
+
+<p>The call is idempotent per address: registering one you already have returns it rather than
+creating a duplicate.</p>
+
+<h2 id="rejected">If a wallet is rejected or revoked</h2>
+<p>The reason is recorded, and you get it back in the error the next time you try to use the
+address:</p>
+
+<div class="code" data-lang="json"><pre><code>{
+  "success": false,
+  "error": {
+    "code": "WALLET_NOT_WHITELISTED",
+    "message": "The destination wallet 0x9a12... is REVOKED (sanctions screening hit) and cannot hold settlement value."
+  }
+}</code></pre></div>
+
+<p>Submitting the same address again after a rejection puts it back into review — so once you have
+addressed whatever the reason said, re-register rather than opening a ticket.</p>
+
+<div class="note warn"><span class="h">Revocation is immediate</span>
+<p>If a wallet is revoked while one of your operations is still in flight, that operation is stopped
+before anything moves, not completed on the way through. Handle <code>WALLET_NOT_WHITELISTED</code>
+as a real outcome in your code rather than assuming it can only happen at request time.</p></div>
+
+<h2 id="keys">What we do and do not hold</h2>
+<p>We hold the <strong>address</strong>. You hold the private key, and none of the calls in this
+documentation require it — the API signs nothing on your behalf and never asks you to sign anything.
+Losing your key does not lose your settlements; it only affects your ability to act on that address
+outside VittaGems.</p>
+`},
+
+'idempotency': { group:'Using the API', title:'Idempotency', eyebrow:'Using the API', h1:'Idempotency',
+  body:`
+<p class="lede">Networks time out. Clients retry. Nothing should settle twice because of it.</p>
+
+<h2 id="where">Where it is required</h2>
+<p>Every operation that moves value needs an <code>Idempotency-Key</code> header of at least ten
+characters:</p>
+
+<div class="tablewrap"><table>
+<thead><tr><th>Endpoint</th><th>Required</th></tr></thead>
+<tbody>
+<tr><td><code>POST /mint</code></td><td>Yes</td></tr>
+<tr><td><code>POST /transfers</code></td><td>Yes</td></tr>
+<tr><td><code>POST /withdrawals</code></td><td>Yes</td></tr>
+<tr><td>Everything else</td><td>No</td></tr>
+</tbody></table></div>
+
+<p>Omit it and you get <code>400</code> before anything is written.</p>
+
+<h2 id="behaviour">What a repeat does</h2>
+<p>Reuse a key and you get back the operation it already created, rather than a second one:</p>
+
+<div class="code" data-lang="json"><pre><code>{
+  "success": true,
+  "message": "Duplicate request detected. Returning existing transaction.",
+  "data": { "id": "t_3b90c6e1...", "type": "MINT", "status": "CONFIRMED" }
+}</code></pre></div>
+
+<p>The status code tells you which happened: <strong><code>202</code> means new work,
+<code>200</code> means you had already asked.</strong> So a client that cannot tell whether its
+request landed can simply send it again — that is exactly what the mechanism is for.</p>
+
+<h2 id="choosing">Choosing keys</h2>
+<p>Derive the key from the <strong>business event</strong>, never from the attempt. A fresh UUID per
+retry defeats the entire mechanism, because every retry then looks like a new instruction.</p>
+
+<div class="code" data-lang="js"><pre><code>// Good — stable across every retry of the same intent
+const key = \`mint-\${invoice.id}-v1\`;
+
+// Bad — a new key each attempt, so a retry mints a second time
+const key = crypto.randomUUID();</code></pre></div>
+
+<p>Keep the operation name in the key. <code>mint-INV-1042</code> and <code>withdraw-INV-1042</code>
+are different events on the same invoice and must not collide.</p>
+
+<p>If you genuinely need to settle the same invoice twice — a corrected amount, say — use a new
+reference and a new key rather than reusing either.</p>
+
+<h2 id="other">The protections behind it</h2>
+<p>Idempotency keys are the outer guard. Two more sit behind them, so a bug in your key generation
+still cannot double-settle:</p>
+
+<ul>
+  <li><strong>One mint per deposit.</strong> A second mint against the same deposit is refused even
+  under a different key.</li>
+  <li><strong>References are unique.</strong> Reusing a <code>referenceId</code> on a new deposit
+  returns <code>409</code>.</li>
+</ul>
+`},
+
+'errors': { group:'Using the API', title:'Errors &amp; retries', eyebrow:'Using the API', h1:'Errors &amp; retries',
+  body:`
+<p class="lede">One envelope for every response. Check <code>success</code> — never infer the outcome
+from the shape of the body.</p>
+
+<h2 id="envelope">The envelope</h2>
+<div class="code" data-lang="json"><pre><code>// success
+{
+  "success": true,
+  "data": { "transactionId": "t_3b90c6e1...", "status": "PENDING" },
+  "request_id": "req-8812"
+}
+
+// failure
+{
+  "success": false,
+  "error": {
+    "code": "WALLET_NOT_WHITELISTED",
+    "message": "The destination wallet 0x0133... is still awaiting whitelist approval."
+  }
+}</code></pre></div>
+
+<p>Send an <code>x-request-id</code> header and it comes back as <code>request_id</code>. Log it —
+quoting it lets support find your exact call in seconds.</p>
+
+<h2 id="status">Status codes</h2>
+<div class="tablewrap"><table>
+<thead><tr><th>Code</th><th>Meaning</th></tr></thead>
+<tbody>
+<tr><td><span class="pill ok">200</span></td><td>Done — or a duplicate idempotent request</td></tr>
+<tr><td><span class="pill ok">201</span></td><td>Created</td></tr>
+<tr><td><span class="pill acc">202</span></td><td>Accepted and queued. <strong>Not settled.</strong></td></tr>
+<tr><td><span class="pill warn">400</span></td><td>Your request is malformed</td></tr>
+<tr><td><span class="pill warn">401</span></td><td>Credential problem</td></tr>
+<tr><td><span class="pill warn">403</span></td><td>Authenticated, not permitted</td></tr>
+<tr><td><span class="pill warn">404</span></td><td>No such resource — or it is not yours</td></tr>
+<tr><td><span class="pill bad">409</span></td><td>Conflicts with the current state</td></tr>
+<tr><td><span class="pill bad">429</span></td><td>Rate limited</td></tr>
+<tr><td><span class="pill bad">500</span></td><td>Our problem. Retry with the same idempotency key.</td></tr>
+</tbody></table></div>
+
+<h2 id="codes">Error codes</h2>
+<p>Branch on <code>error.code</code>. Messages are written for humans and will be reworded.</p>
+
+<div class="tablewrap"><table>
+<thead><tr><th>Code</th><th>Retry?</th><th>What to do</th></tr></thead>
+<tbody>
+<tr><td><code>VALIDATION_ERROR</code></td><td>No</td><td>Fix the request — the message names the field</td></tr>
+<tr><td><code>UNAUTHORIZED</code></td><td>No</td><td>Check the key and the environment</td></tr>
+<tr><td><code>ACCESS_DENIED</code></td><td>No</td><td>Missing scope, or the address is not yours</td></tr>
+<tr><td><code>BLOCKCHAIN_ACCESS_DENIED</code></td><td>No</td><td>Your account has no active settlement address registered — contact support</td></tr>
+<tr><td><code>WALLET_NOT_WHITELISTED</code></td><td>Not automatically</td><td>A person must approve the address. Queue the work and alert someone.</td></tr>
+<tr><td><code>NOT_FOUND</code></td><td>No</td><td>Wrong id, or it belongs to another business</td></tr>
+<tr><td><code>CONFLICT</code></td><td>No</td><td>Duplicate reference, or the resource is past this step. Read its state first.</td></tr>
+<tr><td><code>INTERNAL_ERROR</code></td><td>Yes</td><td>Back off and retry with the <em>same</em> idempotency key</td></tr>
+</tbody></table></div>
+
+<h2 id="handling">Handling them</h2>
+<div class="code" data-lang="js"><pre><code>const NEEDS_A_HUMAN = ['WALLET_NOT_WHITELISTED', 'ACCESS_DENIED', 'BLOCKCHAIN_ACCESS_DENIED'];
+
+async function settle(invoice) {
+  try {
+    return await vg('POST', '/mint', {
+      body: { referenceId: invoice.id, toAddress: WALLET, amount: invoice.total },
+      idempotencyKey: \`mint-\${invoice.id}-v1\`,   // same key on every retry
+    });
+  } catch (err) {
+    if (NEEDS_A_HUMAN.includes(err.code)) {
+      // Retrying changes nothing — someone has to act.
+      await alertOps(invoice, err);
+      return null;
+    }
+    if (err.code === 'CONFLICT') {
+      // Probably already settled. Read the truth rather than guessing.
+      return vg('GET', \`/mint/\${invoice.transactionId}\`);
+    }
+    throw err;   // let your retry policy handle 5xx and network faults
+  }
+}</code></pre></div>
+
+<h2 id="async">Failures that arrive later</h2>
+<p>A <code>202</code> only means the request was accepted. Something that fails during settlement
+shows up as <code>status: "FAILED"</code> with an <code>errorMessage</code> when you poll — never as
+an HTTP error on the original call.</p>
+
+<div class="note"><span class="h">Design for it</span>
+<p>Treat a queued operation as unfinished until you have read <code>CONFIRMED</code> — not when the
+POST returns. Anything that marks an invoice paid on a <code>202</code> will eventually mark one paid
+that failed.</p></div>
+
+<h2 id="limits">Rate limits</h2>
+<p><code>429</code> means you are sending too fast. Back off exponentially and retry; polling loops
+are the usual cause, so poll every few seconds rather than continuously.</p>
+`},
+
+'tracking': { group:'Using the API', title:'Tracking status', eyebrow:'Using the API', h1:'Tracking status',
+  body:`
+<p class="lede">Settlement is asynchronous. Everything you start returns an id, and you read that id
+to find out what happened.</p>
+
+<h2 id="endpoints">What to poll</h2>
+<div class="tablewrap"><table>
+<thead><tr><th>You started</th><th>Poll</th><th>Scope</th></tr></thead>
+<tbody>
+<tr><td>A mint</td><td><code>GET /mint/{transactionId}</code></td><td><code>TRANSACTION_READ</code></td></tr>
+<tr><td>A transfer</td><td><code>GET /transfers/{transactionId}</code></td><td><code>TRANSACTION_READ</code></td></tr>
+<tr><td>A withdrawal</td><td><code>GET /withdrawals/{withdrawalId}</code></td><td><code>WITHDRAW_STATUS</code></td></tr>
+</tbody></table></div>
+
+<h2 id="states">Transaction states</h2>
+<div class="tablewrap"><table>
+<thead><tr><th>State</th><th>Meaning</th><th>Your move</th></tr></thead>
+<tbody>
+<tr><td><span class="pill warn">AWAITING_APPROVAL</span></td><td>Held until verification completes</td><td>Wait — this is normal</td></tr>
+<tr><td><span class="pill">PENDING</span></td><td>Approved and queued</td><td>Wait</td></tr>
+<tr><td><span class="pill acc">SUBMITTED</span></td><td>Sent to the network</td><td>Wait — usually seconds</td></tr>
+<tr><td><span class="pill ok">CONFIRMED</span></td><td>Settled. Terminal.</td><td>Update your records</td></tr>
+<tr><td><span class="pill bad">FAILED</span></td><td>Did not settle. Terminal.</td><td>Read <code>errorMessage</code>; do not blind-retry</td></tr>
+</tbody></table></div>
+
+<div class="code" data-lang="json"><pre><code>{
+  "success": true,
+  "data": {
+    "transactionId": "t_3b90c6e1...",
+    "status": "CONFIRMED",
+    "amount": "25000.00",
+    "toAddress": "0x0133f716...",
+    "blockchainTxHash": "0x1099c195a4f0...",
+    "confirmedAt": "2026-09-23T09:18:07.441Z"
+  }
+}</code></pre></div>
+
+<p><code>blockchainTxHash</code> is the settlement's permanent on-chain receipt. Store it beside your
+invoice — it is the strongest evidence you have that the settlement occurred, and it is what support
+will ask for.</p>
+
+<h2 id="polling">Polling sensibly</h2>
+<p>Two different clocks are involved, and confusing them is the usual mistake:</p>
+
+<ul class="rail">
+  <li><span class="s">Verification — minutes</span><span class="d">While the state is <code>AWAITING_APPROVAL</code>, a person is reviewing your evidence. Poll every 30–60 seconds.</span></li>
+  <li><span class="s">Settlement — seconds</span><span class="d">Once <code>PENDING</code> or <code>SUBMITTED</code>, the network is fast. Poll every 2–5 seconds.</span></li>
+</ul>
+
+<div class="code" data-lang="js"><pre><code>// Back off according to which clock you are on.
+function nextDelay(status) {
+  return status === 'AWAITING_APPROVAL' ? 30_000 : 3_000;
+}
+
+async function track(transactionId, onChange) {
+  let last = null;
+  for (;;) {
+    const tx = await vg('GET', \`/mint/\${transactionId}\`);
+    if (tx.status !== last) { last = tx.status; await onChange(tx); }
+    if (tx.status === 'CONFIRMED' || tx.status === 'FAILED') return tx;
+    await new Promise((r) => setTimeout(r, nextDelay(tx.status)));
+  }
+}</code></pre></div>
+
+<p>Run this from a background worker, not from a request a customer is waiting on, and make
+<code>onChange</code> idempotent — you will observe the same state more than once.</p>
+
+<h2 id="reconciliation">Reconciling</h2>
+<p>Keep <code>referenceId</code>, <code>transactionId</code> and <code>blockchainTxHash</code> against
+your own invoice record. The reference is the join key between your books and ours; the hash is proof.
+A daily job that re-reads anything not in a terminal state will catch the rare case where your
+process died mid-poll.</p>
+
+<div class="note"><span class="h">Webhooks are not available yet</span>
+<p>Push notifications are planned, and the signature scheme is already in place — but delivery is not
+live. Build on polling today. When webhooks ship they will supplement it, and nothing built on polling
+will need to change.</p></div>
+`},
+
+/* ───────────────────────────── FLOWS ───────────────────────────────── */
+
+'accepting-payments': { group:'Settlement flows', title:'Accepting payments', eyebrow:'Flow', h1:'Accepting payments',
+  body:`
+<p class="lede">A customer paid you. This is how that becomes a settlement — record the payment, prove
+it, mint against it.</p>
+
+<h2 id="record">1. Record the deposit</h2>
+<div class="code" data-lang="bash"><pre><code>POST {{BASE}}/deposits</code></pre></div>
+
+<div class="code" data-lang="json"><pre><code>{
+  "amount": "25000.00",
+  "currency": "USD",
+  "referenceId": "INV-1042",
+  "proof": {
+    "bankReference": "UTR-CHAS-889201",
+    "payerName": "Contoso Manufacturing Inc",
+    "notes": "Wire received 09:12 ET, remitter matches invoice"
+  }
+}</code></pre></div>
+
+<dl class="kv">
+  <dt>amount</dt><dd>Decimal string. <strong>This figure is what gets minted</strong> — the mint request cannot change it.</dd>
+  <dt>currency</dt><dd>USD.</dd>
+  <dt>referenceId</dt><dd>Yours, unique, permanent. It is the key for every later operation. Reuse returns <code>409</code>.</dd>
+  <dt>proof.bankReference</dt><dd><strong>Required.</strong> The bank's transfer reference — the UTR, wire reference or ACH trace number. This is what a reviewer matches against a statement.</dd>
+  <dt>proof.payerName</dt><dd>Optional, and the first thing a reviewer looks for. Send it.</dd>
+  <dt>proof.notes</dt><dd>Optional context — anything that helps someone confirm the payment quickly.</dd>
+</dl>
+
+<div class="note warn"><span class="h">Only record money you have actually received</span>
+<p>A deposit asserts that fiat arrived. Recording an expected payment before it lands means a reviewer
+cannot find it, and it is rejected — which also blocks the mint you queued behind it.</p></div>
+
+<h2 id="evidence">2. Attach evidence</h2>
+<p>Technically optional. In practice it is the difference between clearing in minutes and being
+queried. A statement line, a wire confirmation or a remittance advice is enough.</p>
+
+<div class="code" data-lang="bash"><pre><code>curl -X POST {{BASE}}/deposits/$DEPOSIT_ID/documents \\
+  -H "Authorization: Bearer $VG_API_KEY" \\
+  -H "Content-Type: application/pdf" \\
+  -H "X-File-Name: wire-confirmation.pdf" \\
+  --data-binary @wire-confirmation.pdf</code></pre></div>
+
+<p>See <a href="#/documents">uploading documents</a> for accepted formats and the browser version.</p>
+
+<h2 id="mint">3. Mint</h2>
+<div class="code" data-lang="bash"><pre><code>POST {{BASE}}/mint
+Idempotency-Key: mint-INV-1042-01</code></pre></div>
+
+<div class="code" data-lang="json"><pre><code>{
+  "referenceId": "INV-1042",
+  "toAddress": "0x0133F71677B3de040CA09c63F285DE5EDD3912Be",
+  "amount": "25000.00",
+  "corridor": "US-US"
+}</code></pre></div>
+
+<dl class="kv">
+  <dt>referenceId</dt><dd>The deposit to mint against.</dd>
+  <dt>toAddress</dt><dd>One of your <code>ACTIVE</code> wallets.</dd>
+  <dt>amount</dt><dd>Sent for your own reconciliation. <strong>The deposit's amount is authoritative.</strong> Send the same figure so a mismatch shows up as a bug in your code, not a silent discrepancy.</dd>
+  <dt>corridor</dt><dd>Optional label for reporting, e.g. <code>US-US</code>.</dd>
+</dl>
+
+<p>You can mint immediately after recording the deposit — you do not have to wait for verification. The
+mint is recorded as <code>AWAITING_APPROVAL</code> and released automatically once the deposit clears.</p>
+
+<h2 id="outcomes">4. Two outcomes</h2>
+
+<h3>Verified — it mints</h3>
+<p>The deposit becomes <code>VERIFIED</code>, the held mint is released, and the transaction moves to
+<code>CONFIRMED</code> with a <code>blockchainTxHash</code>. Nothing is required from you.</p>
+
+<h3>Rejected — nothing mints</h3>
+<p>The deposit becomes <code>REJECTED</code> and no value is created, then or later:</p>
+
+<div class="code" data-lang="json"><pre><code>{
+  "success": false,
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Cannot mint: deposit INV-1042 was rejected during verification"
+  }
+}</code></pre></div>
+
+<p>A rejected reference is finished. If the payment was real and the evidence was simply wrong,
+record a <strong>new</strong> deposit with a new reference and better evidence.</p>
+
+<h2 id="fullexample">The whole flow</h2>
+<div class="code" data-lang="js"><pre><code>export async function settleInvoice(invoice, statementPdf) {
+  // 1. Record what the bank told us arrived.
+  const deposit = await vg('POST', '/deposits', {
+    body: {
+      amount: invoice.total,              // "25000.00"
+      currency: 'USD',
+      referenceId: invoice.id,            // "INV-1042"
+      proof: {
+        bankReference: invoice.wireRef,   // what a reviewer matches on
+        payerName: invoice.customerLegalName,
+        notes: \`Received \${invoice.receivedAt}\`,
+      },
+    },
+  });
+
+  // 2. Evidence, so it clears without a query.
+  await uploadDocument(\`/deposits/\${deposit.depositId}/documents\`, statementPdf);
+
+  // 3. Mint. Safe to retry: the key is derived from the invoice, not the attempt.
+  const tx = await vg('POST', '/mint', {
+    body: { referenceId: invoice.id, toAddress: SETTLEMENT_WALLET, amount: invoice.total },
+    idempotencyKey: \`mint-\${invoice.id}-v1\`,
+  });
+
+  // 4. Hand off to a background worker — verification takes minutes.
+  await db.invoices.update(invoice.id, {
+    depositId: deposit.depositId,
+    transactionId: tx.transactionId,
+    settlementStatus: tx.status,
+  });
+
+  return tx;
+}</code></pre></div>
+
+<h2 id="pitfalls">Pitfalls</h2>
+<ul>
+  <li><strong>Reusing a reference.</strong> <code>409</code>. References are unique forever, including
+  across rejected deposits.</li>
+  <li><strong>Expecting your mint amount to win.</strong> It will not — the deposit is authoritative.</li>
+  <li><strong>Minting to an unapproved address.</strong> <code>403</code>. Check
+  <a href="#/wallets">your wallet</a> is <code>ACTIVE</code> first.</li>
+  <li><strong>Treating <code>202</code> as settled.</strong> It is not settled until
+  <code>CONFIRMED</code>.</li>
+  <li><strong>A thin bank reference.</strong> <code>"payment"</code> is not a reference. Send the
+  actual UTR or trace number.</li>
+</ul>
+`},
+
+'paying-partners': { group:'Settlement flows', title:'Paying partners', eyebrow:'Flow', h1:'Paying partners',
+  body:`
+<p class="lede">Move a settlement to another business on the rail. No bank on either side, and no
+waiting for a clearing window.</p>
+
+<h2 id="whole">Settlements move whole</h2>
+<p>A transfer moves an entire settlement. <code>amount</code> must equal its full amount — there is no
+partial transfer, and no way to split one afterwards.</p>
+
+<p>Plan for this when you record deposits. If a $25,000 payment will be split between two suppliers,
+record it as two deposits with separate references rather than one you will need to divide later.</p>
+
+<h2 id="call">The call</h2>
+<div class="code" data-lang="bash"><pre><code>POST {{BASE}}/transfers
+Idempotency-Key: xfer-INV-1042-01</code></pre></div>
+
+<div class="code" data-lang="json"><pre><code>{
+  "referenceId": "INV-1042",
+  "fromAddress": "0x0133F71677B3de040CA09c63F285DE5EDD3912Be",
+  "toAddress": "0x9A12Bc44Ef7810dD2b3c5901Fa76Ee4432187C0d",
+  "amount": "25000.00"
+}</code></pre></div>
+
+<dl class="kv">
+  <dt>referenceId</dt><dd>The settlement to move. It must be minted and not already transferred.</dd>
+  <dt>fromAddress</dt><dd>Your wallet — the one currently holding it.</dd>
+  <dt>toAddress</dt><dd>The recipient's settlement address. <strong>Both ends must be approved.</strong></dd>
+  <dt>amount</dt><dd>The settlement's full amount.</dd>
+</dl>
+
+<p>Requires the <code>TRANSFER</code> scope. Poll <code>GET /transfers/{id}</code> the same way as a
+mint.</p>
+
+<h2 id="recipient">Getting the recipient's address</h2>
+<p>Out of band, from the recipient. Treat it with the care you would treat new bank details:
+<strong>confirm it through a channel you already trust</strong>, not by replying to the email it
+arrived in. A transfer to the wrong approved address is a real payment to the wrong party, and it
+cannot be reversed from your side.</p>
+
+<div class="note warn"><span class="h">Both ends are checked</span>
+<p>If either address is not approved, the transfer is refused. The error names which side — read it
+before assuming the problem is yours.</p></div>
+
+<h2 id="after">After a transfer</h2>
+<p>The settlement now belongs to the recipient, and there is one consequence worth planning for:
+<strong>you can no longer redeem it.</strong> Only the current holder can cash a settlement out. If
+you intended to cash out and pay a partner from the proceeds, redeem first.</p>
+
+<div class="code" data-lang="js"><pre><code>// Transferring hands over redemption rights along with the value.
+const tx = await vg('POST', '/transfers', {
+  body: {
+    referenceId: settlement.reference,
+    fromAddress: SETTLEMENT_WALLET,
+    toAddress: supplier.settlementAddress,   // verified out of band
+    amount: settlement.amount,               // must be the full amount
+  },
+  idempotencyKey: \`xfer-\${settlement.reference}-\${supplier.id}\`,
+});</code></pre></div>
+`},
+
+'cashing-out': { group:'Settlement flows', title:'Cashing out', eyebrow:'Flow', h1:'Cashing out',
+  body:`
+<p class="lede">Turning a settlement back into fiat. The API does not move money — it locks the
+settlement while <em>you</em> pay, then closes it once that payout is verified.</p>
+
+<div class="note bad"><span class="h">Read this before you build</span>
+<p>A withdrawal does not send anyone money. It locks a settlement so it cannot be spent while you make
+the payment from your own bank. Only after you report that payment, and it is verified, is the
+settlement closed. Build the steps in this order or you will close settlements against payouts that
+never happened.</p></div>
+
+<h2 id="request">1. Request the withdrawal</h2>
+<div class="code" data-lang="bash"><pre><code>POST {{BASE}}/withdrawals
+Idempotency-Key: wd-INV-1042-01</code></pre></div>
+
+<div class="code" data-lang="json"><pre><code>{
+  "referenceId": "INV-1042",
+  "fromAddress": "0x0133F71677B3de040CA09c63F285DE5EDD3912Be",
+  "amount": "25000.00",
+  "bankDetails": {
+    "accountName": "Contoso Manufacturing Inc",
+    "accountNumber": "****4471",
+    "routingNumber": "021000021"
+  },
+  "windowMinutes": 240
+}</code></pre></div>
+
+<dl class="kv">
+  <dt>referenceId</dt><dd>The settlement to redeem.</dd>
+  <dt>fromAddress</dt><dd>Your wallet, and it must currently hold this settlement.</dd>
+  <dt>bankDetails</dt><dd>Where you are sending the fiat. Stored with the request and shown to reviewers — it is context for them, not an instruction to us.</dd>
+  <dt>windowMinutes</dt><dd>Optional, 1–1440. How long you need to pay and be verified. Set it to match your bank's reality.</dd>
+</dl>
+
+<p>The settlement is now <span class="pill acc">LOCKED</span> and cannot be transferred.</p>
+
+<h3>Sizing the window</h3>
+<p>The window is how long you have to pay out and be verified before the lock is released. Same-day
+ACH? An hour is plenty. A wire going out in tonight's batch? Ask for 720. A window that expires
+releases your funds — recoverable, but it means starting again.</p>
+
+<h2 id="pay">2. Pay your customer</h2>
+<p>From your own bank, exactly as you would without any of this. Then report it — with the reference
+your bank gave you:</p>
+
+<div class="code" data-lang="bash"><pre><code>curl -X POST {{BASE}}/withdrawals/$WITHDRAWAL_ID/payout-proof \\
+  -H "Authorization: Bearer $VG_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "payoutReference": "ACH-TRACE-778812",
+    "notes": "Same-day ACH to Contoso, value date today"
+  }'</code></pre></div>
+
+<p>And the receipt:</p>
+
+<div class="code" data-lang="bash"><pre><code>curl -X POST {{BASE}}/withdrawals/$WITHDRAWAL_ID/documents \\
+  -H "Authorization: Bearer $VG_API_KEY" \\
+  -H "Content-Type: image/png" \\
+  -H "X-File-Name: payout-receipt.png" \\
+  --data-binary @payout-receipt.png</code></pre></div>
+
+<p>The withdrawal becomes <span class="pill warn">PAYOUT_SUBMITTED</span>. Verification cannot start
+before this — until you report the payout, there is nothing to verify.</p>
+
+<h2 id="extend">3. If your bank is slow</h2>
+<p>Banks miss cut-offs. Rather than letting the window expire, say so:</p>
+
+<div class="code" data-lang="bash"><pre><code>curl -X POST {{BASE}}/withdrawals/$WITHDRAWAL_ID/extend \\
+  -H "Authorization: Bearer $VG_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{"reason":"Bank batch payout scheduled for 16:00 ET"}'</code></pre></div>
+
+<p>Each extension adds time, up to a limit. Extensions are recorded with your reason and visible to
+reviewers, so give a real one — it is read.</p>
+
+<h2 id="outcomes">4. Two outcomes</h2>
+
+<h3>Verified — the settlement closes</h3>
+<p>The lock lifts, the settlement is closed, and the withdrawal becomes
+<span class="pill ok">SETTLED</span>. The round trip is complete.</p>
+
+<h3>Rejected or expired — your funds come back</h3>
+<p>Nothing closes, the lock lifts, and the withdrawal becomes
+<span class="pill warn">RELEASED</span>:</p>
+
+<div class="code" data-lang="json"><pre><code>{
+  "withdrawalId": "w_7c12aa...",
+  "status": "RELEASED",
+  "message": "Withdrawal not yet finished — your locked funds have been released back to you."
+}</code></pre></div>
+
+<p><strong>Nothing is lost.</strong> The settlement is spendable again and you can request a fresh
+withdrawal. Surface this state to your own operations team, though — if you already sent the fiat,
+you have paid out against a settlement that is now unredeemed, and that needs a human.</p>
+
+<h2 id="states">States you will see</h2>
+<div class="tablewrap"><table>
+<thead><tr><th>State</th><th>Meaning</th><th>Your move</th></tr></thead>
+<tbody>
+<tr><td><span class="pill acc">LOCK_PENDING</span></td><td>The lock is being applied</td><td>Wait</td></tr>
+<tr><td><span class="pill acc">LOCKED</span></td><td>Locked and waiting on you</td><td><strong>Pay your customer</strong></td></tr>
+<tr><td><span class="pill warn">PAYOUT_SUBMITTED</span></td><td>You reported the payout</td><td>Wait for verification</td></tr>
+<tr><td><span class="pill acc">BURN_PENDING</span></td><td>Verified; closing</td><td>Wait</td></tr>
+<tr><td><span class="pill ok">SETTLED</span></td><td>Closed. Terminal.</td><td>Mark it complete</td></tr>
+<tr><td><span class="pill acc">RELEASE_PENDING</span></td><td>Being unlocked</td><td>Wait</td></tr>
+<tr><td><span class="pill warn">RELEASED</span></td><td>Funds returned. Terminal.</td><td>Investigate — especially if you already paid</td></tr>
+<tr><td><span class="pill bad">FAILED</span></td><td>The lock or close did not complete</td><td>Read <code>errorMessage</code>; contact support</td></tr>
+</tbody></table></div>
+
+<div class="code" data-lang="bash"><pre><code>curl {{BASE}}/withdrawals/$WITHDRAWAL_ID \\
+  -H "Authorization: Bearer $VG_API_KEY"</code></pre></div>
+
+<p>Needs the <code>WITHDRAW_STATUS</code> scope.</p>
+
+<h2 id="notes">Two limits worth knowing</h2>
+<ul>
+  <li><strong>Whole settlements only.</strong> You cannot redeem part of one. Mint at the granularity
+  you expect to redeem at.</li>
+  <li><strong>Only the holder can redeem.</strong> Once transferred, the settlement is the recipient's
+  and only they can cash it out.</li>
+</ul>
+`},
+
+'documents': { group:'Settlement flows', title:'Uploading documents', eyebrow:'Flow', h1:'Uploading documents',
+  body:`
+<p class="lede">A bank reference is a string someone has to take on trust. A statement page is
+evidence. Send both.</p>
+
+<h2 id="how">How uploads work</h2>
+<p>The file goes up as the <strong>raw request body</strong>, with its own <code>Content-Type</code>
+and its name in <code>X-File-Name</code>. No multipart form, no base64 — which means no encoding step
+and no size inflation.</p>
+
+<div class="code" data-lang="bash"><pre><code>curl -X POST {{BASE}}/deposits/$DEPOSIT_ID/documents \\
+  -H "Authorization: Bearer $VG_API_KEY" \\
+  -H "Content-Type: application/pdf" \\
+  -H "X-File-Name: wire-confirmation.pdf" \\
+  --data-binary @wire-confirmation.pdf</code></pre></div>
+
+<p>Payout receipts are identical at <code>POST /withdrawals/{id}/documents</code>.</p>
+
+<h2 id="code">From code</h2>
+
+<div class="tabs" data-tabs="up">
+  <button data-tab="node" class="on">Node.js</button>
+  <button data-tab="browser">Browser</button>
+  <button data-tab="python">Python</button>
+</div>
+
+<div data-panel="up-node">
+<div class="code" data-lang="js"><pre><code>import { readFile } from 'node:fs/promises';
+import { basename, extname } from 'node:path';
+
+const MIME = { '.pdf': 'application/pdf', '.png': 'image/png', '.jpg': 'image/jpeg', '.csv': 'text/csv' };
+
+export async function uploadDocument(path, filePath) {
+  const body = await readFile(filePath);
+
+  const res = await fetch('{{BASE}}' + path, {
+    method: 'POST',
+    headers: {
+      'Content-Type': MIME[extname(filePath).toLowerCase()] ?? 'application/octet-stream',
+      'X-File-Name': basename(filePath),
+      Authorization: \`Bearer \${process.env.VG_API_KEY}\`,
+    },
+    body,                                  // the bytes themselves
+  });
+
+  const json = await res.json();
+  if (!json.success) throw new Error(json.error.message);
+  return json.data;                        // { documentId, sha256, sizeBytes, ... }
+}</code></pre></div>
+</div>
+
+<div data-panel="up-browser" hidden>
+<p>A <code>File</code> from an <code>&lt;input type="file"&gt;</code> is already a valid body — do not
+wrap it in <code>FormData</code>.</p>
+<div class="code" data-lang="js"><pre><code>// Upload from your own back end, not the browser: this needs your API key,
+// and your API key must never reach a page a customer can open.
+async function uploadProof(depositId, file) {
+  const res = await fetch(\`/internal/settlement/deposits/\${depositId}/proof\`, {
+    method: 'POST',
+    headers: { 'Content-Type': file.type, 'X-File-Name': file.name },
+    body: file,          // your server forwards this to VittaGems
+  });
+  if (!res.ok) throw new Error('Upload failed');
+  return res.json();
+}</code></pre></div>
+</div>
+
+<div data-panel="up-python" hidden>
+<div class="code" data-lang="python"><pre><code>import os, mimetypes, requests
+
+def upload_document(path, file_path):
+    mime = mimetypes.guess_type(file_path)[0] or "application/octet-stream"
+    with open(file_path, "rb") as fh:
+        res = requests.post(
+            "{{BASE}}" + path,
+            data=fh.read(),                       # raw bytes, not files={...}
+            headers={
+                "Content-Type": mime,
+                "X-File-Name": os.path.basename(file_path),
+                "Authorization": f"Bearer {os.environ['VG_API_KEY']}",
+            },
+            timeout=60,
+        )
+    payload = res.json()
+    if not payload.get("success"):
+        raise RuntimeError(payload["error"]["message"])
+    return payload["data"]</code></pre></div>
+</div>
+
+<h2 id="types">What is accepted</h2>
+<div class="tablewrap"><table>
+<thead><tr><th>Kind</th><th>Content-Type</th><th>Reviewers see it</th></tr></thead>
+<tbody>
+<tr><td>Images</td><td><code>image/png</code>, <code>image/jpeg</code>, <code>image/gif</code>, <code>image/webp</code></td><td>Inline</td></tr>
+<tr><td>HEIC</td><td><code>image/heic</code></td><td>Downloads</td></tr>
+<tr><td>PDF</td><td><code>application/pdf</code></td><td>Inline</td></tr>
+<tr><td>Text</td><td><code>text/plain</code>, <code>text/csv</code></td><td>Inline</td></tr>
+<tr><td>Word</td><td><code>application/msword</code>, <code>…wordprocessingml.document</code></td><td>Downloads</td></tr>
+<tr><td>Excel</td><td><code>application/vnd.ms-excel</code>, <code>…spreadsheetml.sheet</code></td><td>Downloads</td></tr>
+</tbody></table></div>
+
+<p>Anything else is refused, with the accepted list in the message. The size cap is
+<strong>10 MB</strong>. <strong>Send a PDF or a PNG where you can</strong> — those render inline, and a
+reviewer who can see your evidence without downloading it clears you faster.</p>
+
+<h2 id="response">What comes back</h2>
+<div class="code" data-lang="json"><pre><code>{
+  "success": true,
+  "data": {
+    "documentId": "doc_5f81ac...",
+    "kind": "DEPOSIT_PROOF",
+    "filename": "wire-confirmation.pdf",
+    "mimeType": "application/pdf",
+    "sizeBytes": 184320,
+    "sha256": "8f4a1c7e0b93d2c5a80e1f...",
+    "viewable": true,
+    "createdAt": "2026-09-23T09:16:44.102Z"
+  }
+}</code></pre></div>
+
+<p>The <code>sha256</code> is the file's hash. Compute it yourself and compare if you need to prove
+later that the stored document is exactly what you sent.</p>
+
+<h2 id="reading">Reading a document back</h2>
+<div class="code" data-lang="bash"><pre><code>curl {{BASE}}/documents/$DOCUMENT_ID \\
+  -H "Authorization: Bearer $VG_API_KEY" -o proof.pdf</code></pre></div>
+
+<p>You can read your own uploads only. Asking for another business's document returns
+<code>404</code> — we do not confirm that it exists.</p>
+
+<h2 id="advice">What makes good evidence</h2>
+<ul>
+  <li><strong>The reference must be visible in the document.</strong> A statement page where the UTR
+  cannot be read proves nothing.</li>
+  <li><strong>Show the payer and the amount.</strong> Those are the two things being matched.</li>
+  <li><strong>Crop, don't redact into uselessness.</strong> Masking an account number is fine; masking
+  the reference is not.</li>
+  <li><strong>One clear document beats five partial ones.</strong></li>
+</ul>
+`},
+
+'verification': { group:'Settlement flows', title:'How verification works', eyebrow:'Flow', h1:'How verification works',
+  body:`
+<p class="lede">Every settlement is checked by independent reviewers before value moves. You do not
+manage this — but knowing how it works explains most of what your integration will see.</p>
+
+<h2 id="why">Why it exists</h2>
+<p>The claim "this customer paid me $25,000" is, on its own, just a claim. Verification is what turns
+it into something a counterparty can rely on: people who are not you, and who do not work for the
+business being paid, check your evidence before anything settles.</p>
+
+<p>It is also why the party moving money is never the party approving it. Your API key can
+<em>request</em> a settlement; it cannot release one.</p>
+
+<h2 id="what">What reviewers see</h2>
+<p>Everything you sent, side by side:</p>
+
+<ul>
+  <li>The amount, currency and your reference</li>
+  <li>The bank reference — the UTR, wire reference or trace number</li>
+  <li>The payer name and your notes</li>
+  <li>Every document you attached, previewed where the format allows</li>
+  <li>For withdrawals: the payout reference, the bank details and any extension reasons</li>
+</ul>
+
+<p>They cannot see your API key, your customers, or anything you did not attach to that settlement.</p>
+
+<h2 id="rules">How a decision is reached</h2>
+<p>Several reviewers vote independently, and a fixed number of agreeing votes decides it — in either
+direction. The same threshold that approves also rejects, so a settlement cannot be held up by one
+dissenting voice, and cannot be pushed through by one friendly one.</p>
+
+<p>Every proposal has a time window. If it closes without enough votes either way, it is treated as
+not verified, which is the safe outcome: for a deposit nothing mints, and for a withdrawal your locked
+funds are returned.</p>
+
+<h2 id="see">What you see, by stage</h2>
+<div class="tablewrap"><table>
+<thead><tr><th>Stage</th><th>Deposit</th><th>Withdrawal</th></tr></thead>
+<tbody>
+<tr><td>Submitted</td><td><code>PENDING_VERIFICATION</code></td><td><code>PAYOUT_SUBMITTED</code></td></tr>
+<tr><td>Your mint meanwhile</td><td><code>AWAITING_APPROVAL</code></td><td>—</td></tr>
+<tr><td>Approved</td><td><code>VERIFIED</code> → mint released</td><td><code>BURN_PENDING</code> → <code>SETTLED</code></td></tr>
+<tr><td>Rejected or expired</td><td><code>REJECTED</code>, nothing mints</td><td><code>RELEASED</code>, funds returned</td></tr>
+</tbody></table></div>
+
+<h2 id="fast">Getting verified quickly</h2>
+<p>Most of what determines your turnaround is set by the time you send the request:</p>
+
+<ul class="rail">
+  <li><span class="s">Send the real bank reference</span><span class="d">The exact UTR or trace number, not a description. It is the first thing matched.</span></li>
+  <li><span class="s">Attach a document that shows it</span><span class="d">A statement line or wire confirmation where the reference, payer and amount are all legible.</span></li>
+  <li><span class="s">Name the payer as the bank does</span><span class="d">The legal name on the transfer. A trading name that does not match the remitter causes a query.</span></li>
+  <li><span class="s">Submit once the money has landed</span><span class="d">Not when you expect it. A reviewer who cannot find the payment cannot approve it.</span></li>
+</ul>
+
+<h2 id="rejected">If something is rejected</h2>
+<p>A rejection is final for that request. Nothing partial happens — a rejected deposit mints nothing,
+and a rejected withdrawal returns your funds intact.</p>
+
+<p>If the underlying payment was genuine and the evidence was simply inadequate, start a new request
+with a new reference and better evidence. Do not retry the rejected one; it cannot be revived.</p>
+
+<div class="note"><span class="h">Build the wait into your product</span>
+<p>Verification takes minutes, not milliseconds, and occasionally longer. Show your own users a
+"settlement in progress" state rather than blocking them, and treat
+<code>AWAITING_APPROVAL</code> as a normal, expected status rather than an error.</p></div>
+`},
+
+/* ───────────────────────────── REFERENCE ───────────────────────────── */
+
+'api-reference': { group:'Reference', title:'API reference', eyebrow:'Reference', h1:'API reference',
+  body:`
+<p class="lede">Every endpoint available to you, with the scope and headers it needs. Base URL
+<code>{{BASE}}</code>.</p>
+
+<h2 id="headers">Headers</h2>
+<div class="tablewrap"><table>
+<thead><tr><th>Header</th><th>When</th></tr></thead>
+<tbody>
+<tr><td><code>Authorization: Bearer &lt;api key&gt;</code></td><td>Every request</td></tr>
+<tr><td><code>Content-Type: application/json</code></td><td>Any request with a JSON body</td></tr>
+<tr><td><code>Idempotency-Key: &lt;10+ chars&gt;</code></td><td><code>POST /mint</code>, <code>/transfers</code>, <code>/withdrawals</code></td></tr>
+<tr><td><code>X-File-Name: &lt;filename&gt;</code></td><td>Document uploads (with the file's own <code>Content-Type</code>)</td></tr>
+<tr><td><code>x-request-id: &lt;your id&gt;</code></td><td>Optional; echoed back as <code>request_id</code></td></tr>
+</tbody></table></div>
+
+<h2 id="account">Account</h2>
+<div class="tablewrap"><table>
+<thead><tr><th>Endpoint</th><th>Scope</th><th>Notes</th></tr></thead>
+<tbody>
+<tr><td><span class="m m-get">GET</span> <code>/client</code></td><td>—</td><td>Your account, addresses and scopes</td></tr>
+<tr><td><span class="m m-get">GET</span> <code>/wallets</code></td><td>—</td><td>Your wallets and their whitelist status</td></tr>
+<tr><td><span class="m m-post">POST</span> <code>/wallets</code></td><td>—</td><td><code>address</code>, <code>label</code>. Submits for review.</td></tr>
+</tbody></table></div>
+
+<h2 id="deposits">Deposits</h2>
+<div class="tablewrap"><table>
+<thead><tr><th>Endpoint</th><th>Scope</th><th>Body</th></tr></thead>
+<tbody>
+<tr><td><span class="m m-post">POST</span> <code>/deposits</code></td><td>—</td><td><code>amount</code>, <code>currency</code>, <code>referenceId</code>, <code>proof.bankReference</code> (+ <code>payerName</code>, <code>notes</code>)</td></tr>
+<tr><td><span class="m m-post">POST</span> <code>/deposits/{id}/documents</code></td><td>—</td><td>Raw file bytes</td></tr>
+</tbody></table></div>
+
+<h2 id="mint">Mint</h2>
+<div class="tablewrap"><table>
+<thead><tr><th>Endpoint</th><th>Scope</th><th>Body</th></tr></thead>
+<tbody>
+<tr><td><span class="m m-post">POST</span> <code>/mint</code></td><td><code>MINT</code></td><td><code>referenceId</code>, <code>toAddress</code>, <code>amount</code>, <code>corridor</code>?</td></tr>
+<tr><td><span class="m m-get">GET</span> <code>/mint/{id}</code></td><td><code>TRANSACTION_READ</code></td><td>—</td></tr>
+</tbody></table></div>
+
+<h2 id="transfers">Transfers</h2>
+<div class="tablewrap"><table>
+<thead><tr><th>Endpoint</th><th>Scope</th><th>Body</th></tr></thead>
+<tbody>
+<tr><td><span class="m m-post">POST</span> <code>/transfers</code></td><td><code>TRANSFER</code></td><td><code>referenceId</code>, <code>fromAddress</code>, <code>toAddress</code>, <code>amount</code></td></tr>
+<tr><td><span class="m m-get">GET</span> <code>/transfers/{id}</code></td><td><code>TRANSACTION_READ</code></td><td>—</td></tr>
+</tbody></table></div>
+
+<h2 id="withdrawals">Withdrawals</h2>
+<div class="tablewrap"><table>
+<thead><tr><th>Endpoint</th><th>Scope</th><th>Body</th></tr></thead>
+<tbody>
+<tr><td><span class="m m-post">POST</span> <code>/withdrawals</code></td><td><code>WITHDRAW</code></td><td><code>referenceId</code>, <code>fromAddress</code>, <code>amount</code>, <code>bankDetails</code>, <code>windowMinutes</code>?</td></tr>
+<tr><td><span class="m m-get">GET</span> <code>/withdrawals/{id}</code></td><td><code>WITHDRAW_STATUS</code></td><td>—</td></tr>
+<tr><td><span class="m m-post">POST</span> <code>/withdrawals/{id}/payout-proof</code></td><td><code>WITHDRAW</code></td><td><code>payoutReference</code>, <code>notes</code>?</td></tr>
+<tr><td><span class="m m-post">POST</span> <code>/withdrawals/{id}/extend</code></td><td><code>WITHDRAW</code></td><td><code>reason</code></td></tr>
+<tr><td><span class="m m-post">POST</span> <code>/withdrawals/{id}/documents</code></td><td>—</td><td>Raw file bytes</td></tr>
+</tbody></table></div>
+
+<h2 id="documents">Documents</h2>
+<div class="tablewrap"><table>
+<thead><tr><th>Endpoint</th><th>Scope</th><th>Notes</th></tr></thead>
+<tbody>
+<tr><td><span class="m m-get">GET</span> <code>/documents/{id}</code></td><td>—</td><td>Your own uploads only</td></tr>
+</tbody></table></div>
+
+<div class="note"><span class="h">Not listed here</span>
+<p>The reviewer-facing endpoints are documented separately and are not available to client API keys.
+If a call returns <code>401</code> and it is not in this table, that is why.</p></div>
+`},
+
+'glossary': { group:'Reference', title:'Statuses &amp; glossary', eyebrow:'Reference', h1:'Statuses &amp; glossary',
+  body:`
+<p class="lede">Every status this API will hand you, in one place.</p>
+
+<h2 id="deposit">Deposit</h2>
+<div class="tablewrap"><table>
+<thead><tr><th>Status</th><th>Meaning</th><th>Terminal</th></tr></thead>
+<tbody>
+<tr><td><span class="pill warn">PENDING_VERIFICATION</span></td><td>Recorded, awaiting review</td><td>No</td></tr>
+<tr><td><span class="pill ok">VERIFIED</span></td><td>Confirmed. Any held mint is released.</td><td>Yes</td></tr>
+<tr><td><span class="pill bad">REJECTED</span></td><td>Not confirmed. Nothing mints, ever.</td><td>Yes</td></tr>
+</tbody></table></div>
+
+<h2 id="transaction">Transaction (mint, transfer)</h2>
+<div class="tablewrap"><table>
+<thead><tr><th>Status</th><th>Meaning</th><th>Terminal</th></tr></thead>
+<tbody>
+<tr><td><span class="pill warn">AWAITING_APPROVAL</span></td><td>Held pending verification</td><td>No</td></tr>
+<tr><td><span class="pill">PENDING</span></td><td>Queued</td><td>No</td></tr>
+<tr><td><span class="pill acc">SUBMITTED</span></td><td>Sent to the network</td><td>No</td></tr>
+<tr><td><span class="pill ok">CONFIRMED</span></td><td>Settled, with a <code>blockchainTxHash</code></td><td>Yes</td></tr>
+<tr><td><span class="pill bad">FAILED</span></td><td>Did not settle; see <code>errorMessage</code></td><td>Yes</td></tr>
+</tbody></table></div>
+
+<h2 id="withdrawal">Withdrawal</h2>
+<div class="tablewrap"><table>
+<thead><tr><th>Status</th><th>Meaning</th><th>Terminal</th></tr></thead>
+<tbody>
+<tr><td><span class="pill">REQUESTED</span></td><td>Created</td><td>No</td></tr>
+<tr><td><span class="pill acc">LOCK_PENDING</span></td><td>Lock being applied</td><td>No</td></tr>
+<tr><td><span class="pill acc">LOCKED</span></td><td>Locked — pay your customer now</td><td>No</td></tr>
+<tr><td><span class="pill warn">PAYOUT_SUBMITTED</span></td><td>Payout reported, under review</td><td>No</td></tr>
+<tr><td><span class="pill acc">BURN_PENDING</span></td><td>Verified; closing</td><td>No</td></tr>
+<tr><td><span class="pill ok">SETTLED</span></td><td>Closed</td><td>Yes</td></tr>
+<tr><td><span class="pill acc">RELEASE_PENDING</span></td><td>Being unlocked</td><td>No</td></tr>
+<tr><td><span class="pill warn">RELEASED</span></td><td>Funds returned to you</td><td>Yes</td></tr>
+<tr><td><span class="pill bad">FAILED</span></td><td>Lock or close did not complete</td><td>Yes</td></tr>
+</tbody></table></div>
+
+<h2 id="wallet">Wallet</h2>
+<div class="tablewrap"><table>
+<thead><tr><th>Status</th><th>Meaning</th></tr></thead>
+<tbody>
+<tr><td><span class="pill warn">PENDING</span></td><td>Under review — cannot hold value</td></tr>
+<tr><td><span class="pill ok">ACTIVE</span></td><td>Approved</td></tr>
+<tr><td><span class="pill bad">REJECTED</span></td><td>Refused, with a reason</td></tr>
+<tr><td><span class="pill bad">REVOKED</span></td><td>Approval withdrawn, with a reason</td></tr>
+</tbody></table></div>
+
+<h2 id="terms">Terms</h2>
+<dl class="kv">
+  <dt>settlement</dt><dd>One unit of value on the rail, identified by your <code>referenceId</code>. Moves whole; never split.</dd>
+  <dt>referenceId</dt><dd>Your identifier for a settlement, chosen when you record the deposit. Unique forever.</dd>
+  <dt>deposit</dt><dd>Your record that fiat arrived. Verified before anything is minted against it.</dd>
+  <dt>mint</dt><dd>Creating settlement value against a verified deposit.</dd>
+  <dt>transfer</dt><dd>Moving a whole settlement to another business on the rail.</dd>
+  <dt>withdrawal</dt><dd>Redeeming a settlement back to fiat. Locks it while you pay out.</dd>
+  <dt>bank reference</dt><dd>The reference your bank assigned to a transfer — UTR, wire reference or ACH trace number. What reviewers match on.</dd>
+  <dt>payout reference</dt><dd>The same thing for money you sent out.</dd>
+  <dt>corridor</dt><dd>Optional reporting label on a mint, e.g. <code>US-US</code>.</dd>
+  <dt>blockchainTxHash</dt><dd>The settlement's permanent on-chain receipt. Store it.</dd>
+  <dt>window</dt><dd>The time a request has to be verified before it expires.</dd>
+</dl>
+`},
+
+'go-live': { group:'Reference', title:'Before you go live', eyebrow:'Reference', h1:'Before you go live',
+  body:`
+<p class="lede">Work through this in sandbox. Every item is something that has gone wrong in a real
+integration.</p>
+
+<h2 id="credentials">Credentials</h2>
+<ul>
+  <li>Production key is in a secrets manager, <strong>not</strong> in your repository or your image</li>
+  <li>The key is never sent to a browser or mobile client — all calls originate server-side</li>
+  <li>Sandbox and production keys come from separate configuration, so neither can be used by accident</li>
+  <li>You know who to contact for rotation, and rotating does not require a code change</li>
+</ul>
+
+<h2 id="wallet">Wallet</h2>
+<ul>
+  <li>Your production wallet reads <code>ACTIVE</code> at <code>GET /wallets</code></li>
+  <li>You handle <code>WALLET_NOT_WHITELISTED</code> as an alert to a human, not a retry</li>
+  <li>The private key for that address is stored somewhere you control, and somewhere you can still
+  reach if the person who generated it leaves</li>
+</ul>
+
+<h2 id="correctness">Correctness</h2>
+<ul>
+  <li>Idempotency keys are derived from your own records — <strong>confirm a retry does not
+  double-settle</strong> by actually sending one twice in sandbox</li>
+  <li>References are unique, and you have decided what happens when a customer pays the same invoice
+  twice</li>
+  <li>Amounts are sent as strings, and your serialiser is not silently turning them into numbers</li>
+  <li>You never mark an invoice paid on a <code>202</code> — only on <code>CONFIRMED</code></li>
+  <li>You have exercised a rejection, not just the happy path</li>
+</ul>
+
+<h2 id="async">Asynchronous handling</h2>
+<ul>
+  <li>Polling runs in a background worker, never inside a customer-facing request</li>
+  <li>Poll intervals match the clock: ~30s while <code>AWAITING_APPROVAL</code>, ~3s once
+  <code>SUBMITTED</code></li>
+  <li>A reconciliation job re-reads anything left non-terminal, so a crashed poll self-heals</li>
+  <li>Your status handler is idempotent — you will see the same state more than once</li>
+</ul>
+
+<h2 id="withdrawals">Withdrawals, specifically</h2>
+<ul>
+  <li>You pay your customer <strong>after</strong> the withdrawal reports <code>LOCKED</code>, never
+  before</li>
+  <li>You submit the payout reference promptly — verification cannot start until you do</li>
+  <li><code>RELEASED</code> raises an operational alert, because it means a payout may have gone out
+  against a settlement that is now unredeemed</li>
+  <li>Your window sizes match your bank's actual cut-offs, and you extend rather than let one expire</li>
+</ul>
+
+<h2 id="evidence">Evidence</h2>
+<ul>
+  <li>Every deposit carries a real bank reference, not a description</li>
+  <li>Documents are attached automatically, not when someone remembers</li>
+  <li>The reference, payer and amount are legible in whatever you attach</li>
+  <li>PDF or PNG where possible — those are previewed rather than downloaded</li>
+</ul>
+
+<h2 id="observability">Observability</h2>
+<ul>
+  <li>You log <code>referenceId</code>, <code>transactionId</code> and <code>request_id</code> for
+  every call</li>
+  <li><code>blockchainTxHash</code> is stored against your invoice</li>
+  <li>You alert on <code>FAILED</code>, on <code>RELEASED</code>, and on anything stuck non-terminal
+  for longer than your expected window</li>
+  <li>API keys are redacted from your logs — check this rather than assume it</li>
+</ul>
+
+<h2 id="switch">Switching over</h2>
+<p>Two values change: the base URL and the API key.</p>
+
+<div class="code" data-lang="bash"><pre><code># sandbox
+VG_API_BASE="{{SANDBOX}}"
+VG_API_KEY="vg_test_..."
+
+# production
+VG_API_BASE="{{PROD}}"
+VG_API_KEY="vg_live_..."</code></pre></div>
+
+<p>Settle one small, real payment end to end before you point any volume at it — including the
+withdrawal, so you have seen a full round trip in production rather than only in sandbox.</p>
+`},
+};
+
+/* ════════════════════════════════════════════════════════════════════
+   Shell: nav, routing, TOC, tabs, copy, highlighting, theme, env
+   ════════════════════════════════════════════════════════════════════ */
+
+const KEYS = Object.keys(PAGES);
+const GROUPS = [];
+KEYS.forEach((k) => {
+  const g = PAGES[k].group;
+  let row = GROUPS.find((x) => x.name === g);
+  if (!row) GROUPS.push((row = { name: g, items: [] }));
+  row.items.push(k);
+});
+
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const store = {
+  get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch {} },
+};
+
+let envName = ENVS[store.get('vg-env')] ? store.get('vg-env') : 'sandbox';
+const baseUrl = () => ENVS[envName];
+
+/** Swap the URL placeholders for whichever environment is selected. */
+const expand = (html) => html
+  .split('{{BASE}}').join(ENVS[envName])
+  .split('{{SANDBOX}}').join(ENVS.sandbox)
+  .split('{{PROD}}').join(ENVS.production);
+
+/* ── sidebar ─────────────────────────────────────────────────────── */
+function buildNav() {
+  $('#navlist').innerHTML = GROUPS.map((g) => `
+    <div class="navgroup" data-group="${g.name}">
+      <h4>${g.name}</h4>
+      ${g.items.map((k) => `<a href="#/${k}" data-key="${k}">${PAGES[k].title}</a>`).join('')}
+    </div>`).join('');
+}
+
+function filterNav(q) {
+  const needle = q.trim().toLowerCase();
+  let shown = 0;
+  $$('.navgroup').forEach((grp) => {
+    let any = 0;
+    $$('a', grp).forEach((a) => {
+      const hit = !needle || a.dataset.key.includes(needle) || a.textContent.toLowerCase().includes(needle);
+      a.hidden = !hit;
+      if (hit) { any++; shown++; }
+    });
+    grp.hidden = !any;
+  });
+  $('#navempty').hidden = shown > 0;
+}
+
+/* ── routing ─────────────────────────────────────────────────────── */
+function currentKey() {
+  const k = (location.hash || '').replace(/^#\/?/, '');
+  return PAGES[k] ? k : 'introduction';
+}
+
+function render() {
+  const key = currentKey();
+  const page = PAGES[key];
+  const idx = KEYS.indexOf(key);
+  const prev = KEYS[idx - 1];
+  const next = KEYS[idx + 1];
+
+  $('#main').innerHTML = `
+    <article class="page">
+      <p class="eyebrow">${page.eyebrow}</p>
+      <h1>${page.h1}</h1>
+      ${expand(page.body)}
+      <nav class="pagenav">
+        ${prev ? `<a href="#/${prev}"><span>Previous</span><b>${PAGES[prev].title}</b></a>` : '<span></span>'}
+        ${next ? `<a class="nx" href="#/${next}"><span>Next</span><b>${PAGES[next].title}</b></a>` : '<span></span>'}
+      </nav>
+    </article>`;
+
+  $$('#navlist a').forEach((a) => a.classList.toggle('on', a.dataset.key === key));
+  document.title = `${page.title} · VittaGems Settlement Docs`;
+
+  decorateCode();
+  buildTabs();
+  buildToc();
+  if (window.matchMedia('(max-width:860px)').matches) closeNav();
+}
+
+/* ── on this page ────────────────────────────────────────────────── */
+let tocObserver = null;
+function buildToc() {
+  const heads = $$('#main h2[id]');
+  const toc = $('#toc');
+  if (!heads.length) { toc.innerHTML = ''; return; }
+  toc.innerHTML = `<h5>On this page</h5>` +
+    heads.map((h) => `<a href="#${h.id}" data-h="${h.id}">${h.textContent}</a>`).join('');
+
+  toc.onclick = (e) => {
+    const a = e.target.closest('a[data-h]');
+    if (!a) return;
+    e.preventDefault();
+    document.getElementById(a.dataset.h)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  tocObserver?.disconnect();
+  tocObserver = new IntersectionObserver((entries) => {
+    entries.forEach((en) => {
+      if (!en.isIntersecting) return;
+      $$('#toc a').forEach((a) => a.classList.toggle('on', a.dataset.h === en.target.id));
+    });
+  }, { rootMargin: '-70px 0px -72% 0px' });
+  heads.forEach((h) => tocObserver.observe(h));
+}
+
+/* ── tabs ────────────────────────────────────────────────────────── */
+function buildTabs() {
+  $$('#main .tabs[data-tabs]').forEach((bar) => {
+    const name = bar.dataset.tabs;
+    const remembered = store.get(`vg-tab-${name}`);
+    const pick = (tab) => {
+      $$('button', bar).forEach((b) => b.classList.toggle('on', b.dataset.tab === tab));
+      $$(`[data-panel^="${name}-"]`, $('#main')).forEach((p) => {
+        p.hidden = p.dataset.panel !== `${name}-${tab}`;
+      });
+      store.set(`vg-tab-${name}`, tab);
+    };
+    if (remembered && $(`button[data-tab="${remembered}"]`, bar)) pick(remembered);
+    bar.addEventListener('click', (e) => {
+      const b = e.target.closest('button[data-tab]');
+      if (b) pick(b.dataset.tab);
+    });
+  });
+}
+
+/* ── code blocks: highlight + copy ───────────────────────────────── */
+const esc = (s) => s.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+
+// One regex pass per language, so a replacement can never land inside an earlier one.
+const RULES = {
+  bash: [/(#[^\n]*)|("(?:\\.|[^"\\])*"|'(?:[^'\\]|\\.)*')|(\s--?[A-Za-z][\w-]*)|\b(curl|npm|npx|node|cd|cp|export|git)\b/g,
+         ['tk-com', 'tk-str', 'tk-kw', 'tk-kw']],
+  json: [/("(?:\\.|[^"\\])*")(\s*:)|(\/\/[^\n]*)|("(?:\\.|[^"\\])*")|\b(true|false|null)\b|(-?\d+(?:\.\d+)?)/g,
+         ['tk-key', null, 'tk-com', 'tk-str', 'tk-kw', 'tk-num']],
+  js:   [/(\/\/[^\n]*)|(`(?:\\.|[^`\\])*`|'(?:\\.|[^'\\])*'|"(?:\\.|[^"\\])*")|\b(const|let|async|await|function|return|if|for|throw|new|export|import|from|of)\b|\b(\d+(?:_\d+)*)\b/g,
+         ['tk-com', 'tk-str', 'tk-kw', 'tk-num']],
+  python: [/(#[^\n]*)|(f?"(?:\\.|[^"\\])*"|f?'(?:\\.|[^'\\])*')|\b(def|class|import|from|with|as|return|raise|if|not|or|and|None|True|False)\b|\b(\d+)\b/g,
+         ['tk-com', 'tk-str', 'tk-kw', 'tk-num']],
+};
+
+function highlight(text, lang) {
+  const rule = RULES[lang];
+  if (!rule) return esc(text);
+  const [re, classes] = rule;
+  let out = '', last = 0, m;
+  re.lastIndex = 0;
+  while ((m = re.exec(text)) !== null) {
+    if (m[0] === '') { re.lastIndex++; continue; }
+    out += esc(text.slice(last, m.index));
+    const gi = m.slice(1).findIndex((x) => x !== undefined);
+    const cls = classes[gi];
+    out += cls ? `<span class="${cls}">${esc(m[0])}</span>` : esc(m[0]);
+    last = m.index + m[0].length;
+  }
+  return out + esc(text.slice(last));
+}
+
+function decorateCode() {
+  $$('#main .code').forEach((box) => {
+    const lang = box.dataset.lang || '';
+    const code = $('code', box) || $('pre', box);
+    const raw = code.textContent;
+    code.innerHTML = highlight(raw, lang);
+
+    const bar = document.createElement('div');
+    bar.className = 'bar';
+    bar.innerHTML = `<span class="lang">${lang || 'text'}</span><span class="spacer"></span>
+      <button class="copy" type="button">Copy</button>`;
+    box.insertBefore(bar, box.firstChild);
+
+    $('.copy', bar).addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
+      try {
+        await navigator.clipboard.writeText(raw);
+        btn.textContent = 'Copied';
+        btn.classList.add('done');
+      } catch {
+        btn.textContent = 'Press Ctrl+C';
+      }
+      setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('done'); }, 1800);
+    });
+  });
+}
+
+/* ── mobile nav ──────────────────────────────────────────────────── */
+const isNarrow = () => window.matchMedia('(max-width:860px)').matches;
+function closeNav() { $('#sidebar').hidden = true; $('#menubtn').setAttribute('aria-expanded', 'false'); }
+function openNav() { $('#sidebar').hidden = false; $('#menubtn').setAttribute('aria-expanded', 'true'); }
+
+$('#menubtn').addEventListener('click', () => ($('#sidebar').hidden ? openNav() : closeNav()));
+window.addEventListener('resize', () => { if (!isNarrow()) $('#sidebar').hidden = false; });
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && isNarrow()) closeNav();
+  if (e.key === '/' && document.activeElement !== $('#navsearch')) {
+    e.preventDefault();
+    if (isNarrow()) openNav();
+    $('#navsearch').focus();
+  }
+});
+
+/* ── environment switch ──────────────────────────────────────────── */
+$('#envsel').value = envName;
+$('#envsel').addEventListener('change', (e) => {
+  envName = ENVS[e.target.value] ? e.target.value : 'sandbox';
+  store.set('vg-env', envName);
+  render();                       // rewrites every base URL in the samples
+});
+
+/* ── theme ───────────────────────────────────────────────────────── */
+const savedTheme = store.get('vg-theme');
+if (savedTheme) document.documentElement.setAttribute('data-theme', savedTheme);
+$('#themebtn').addEventListener('click', () => {
+  const dark = document.documentElement.getAttribute('data-theme') === 'dark'
+    || (!document.documentElement.hasAttribute('data-theme')
+        && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  const next = dark ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', next);
+  store.set('vg-theme', next);
+});
+
+/* ── boot ────────────────────────────────────────────────────────── */
+buildNav();
+$('#navsearch').addEventListener('input', (e) => filterNav(e.target.value));
+window.addEventListener('hashchange', () => { render(); window.scrollTo(0, 0); });
+if (isNarrow()) closeNav();
+render();
+</script>
+</body>
+</html>

@@ -1,12 +1,26 @@
-import { PrismaClient } from '@prisma/client';
-import { ValidationError, NotFoundError, ForbiddenError, ConflictError } from '../../utils/errors';
-import { transactionQueue } from '../../workers/transaction.worker';
-import { env } from '../../config/env';
-import { DaoService } from '../dao/dao.service';
-import { WalletService } from '../wallets/wallet.service';
+import { PrismaClient } from "@prisma/client";
+import {
+  ValidationError,
+  NotFoundError,
+  ForbiddenError,
+  ConflictError,
+} from "../../utils/errors";
+import { transactionQueue } from "../../workers/transaction.worker";
+import { env } from "../../config/env";
+import { DaoService } from "../dao/dao.service";
+import { WalletService } from "../wallets/wallet.service";
+import { blockchainService } from "../../blockchain/BlockchainService";
+import { kycComplianceService } from "../../blockchain/KYCComplianceService";
+import { logger } from "../../utils/logger";
 
 // Withdrawal states during which the settlement is committed and must not be withdrawn again.
-const ACTIVE_DAO_STATES = ['LOCK_PENDING', 'LOCKED', 'PAYOUT_SUBMITTED', 'BURN_PENDING', 'RELEASE_PENDING'];
+const ACTIVE_DAO_STATES = [
+  "LOCK_PENDING",
+  "LOCKED",
+  "PAYOUT_SUBMITTED",
+  "BURN_PENDING",
+  "RELEASE_PENDING",
+];
 
 const prisma = new PrismaClient();
 
@@ -22,16 +36,25 @@ interface WithdrawalRequest {
 
 export class WithdrawalService {
   static async createWithdrawalRequest(data: WithdrawalRequest) {
-    const { clientId, idempotencyKey, amount, bankDetails, fromAddress, referenceId } = data;
+    const {
+      clientId,
+      idempotencyKey,
+      amount,
+      bankDetails,
+      fromAddress,
+      referenceId,
+    } = data;
 
     // The on-chain burn closes a specific settlement, identified by its referenceId.
     // (Per the contract, that settlement must already be TRANSFERRED/PAYOUT_CONFIRMED.)
     if (!referenceId) {
-      throw new ValidationError('referenceId (the settlement to redeem/burn) is required');
+      throw new ValidationError(
+        "referenceId (the settlement to redeem/burn) is required",
+      );
     }
 
     // Only a whitelisted wallet can hold - and therefore redeem - settlement value.
-    await WalletService.assertActive(fromAddress, 'source');
+    await WalletService.assertActive(fromAddress, "source");
 
     // 1. Verify client owns the fromAddress
     const account = await prisma.blockchainAccount.findFirst({
@@ -39,23 +62,36 @@ export class WithdrawalService {
         address: fromAddress,
         clientId,
         isActive: true,
-      }
+      },
     });
 
     if (!account) {
-      throw new ForbiddenError(`Client is not authorized to withdraw from address ${fromAddress}`);
+      throw new ForbiddenError(
+        `Client is not authorized to withdraw from address ${fromAddress}`,
+      );
     }
 
-    // 2. Prevent duplicate active withdrawals with same idempotencyKey (already partially handled by DB unique constraint, but we check logically)
+    // 2. In live mode, verify active on-chain KYC compliance before proceeding with withdrawal
+    if (env.BLOCKCHAIN_MODE === "live") {
+      const kyc = await kycComplianceService.getIdentity(fromAddress);
+      if (!kyc.isVerified) {
+        throw new ForbiddenError(
+          `Partner address ${fromAddress} does not have active KYC verification on-chain. Complete KYC verification before requesting a withdrawal.`,
+          "KYC_VERIFICATION_REQUIRED",
+        );
+      }
+    }
+
+    // 3. Prevent duplicate active withdrawals with same idempotencyKey (already partially handled by DB unique constraint, but we check logically)
     const existingWithdrawal = await prisma.withdrawal.findUnique({
-      where: { idempotencyKey }
+      where: { idempotencyKey },
     });
 
     if (existingWithdrawal) {
       return {
         withdrawalId: existingWithdrawal.id,
         status: existingWithdrawal.status,
-        message: 'Returning existing withdrawal request',
+        message: "Returning existing withdrawal request",
       };
     }
 
@@ -71,7 +107,7 @@ export class WithdrawalService {
         idempotencyKey,
         amount,
         bankDetails,
-        status: 'REQUESTED',
+        status: "REQUESTED",
       },
     });
 
@@ -79,20 +115,20 @@ export class WithdrawalService {
     await prisma.transaction.create({
       data: {
         clientId,
-        type: 'BURN',
+        type: "BURN",
         referenceId,
         withdrawalId: withdrawal.id,
         amount,
         fromAddress,
-        status: 'PENDING',
-      }
+        status: "PENDING",
+      },
     });
 
     // Note: It stays in REQUESTED status until approved.
     return {
       withdrawalId: withdrawal.id,
       status: withdrawal.status,
-      message: 'Withdrawal requested. Awaiting bank verification and approval.',
+      message: "Withdrawal requested. Awaiting bank verification and approval.",
     };
   }
 
@@ -105,40 +141,44 @@ export class WithdrawalService {
   static async approveWithdrawal(withdrawalId: string) {
     if (env.DAO_VERIFICATION_ENABLED) {
       throw new ConflictError(
-        'DAO verification is enabled: withdrawals are approved by DAO vote, not by this endpoint. ' +
-          'Pay the customer, then submit the payout reference with POST /withdrawals/{id}/payout-proof.',
+        "DAO verification is enabled: withdrawals are approved by DAO vote, not by this endpoint. " +
+          "Pay the customer, then submit the payout reference with POST /withdrawals/{id}/payout-proof.",
       );
     }
 
     // 1. Get the withdrawal
     const withdrawal = await prisma.withdrawal.findUnique({
       where: { id: withdrawalId },
-      include: { Transactions: true }
+      include: { Transactions: true },
     });
 
     if (!withdrawal) {
-      throw new NotFoundError('Withdrawal not found');
+      throw new NotFoundError("Withdrawal not found");
     }
 
-    if (withdrawal.status !== 'REQUESTED') {
-      throw new ConflictError(`Cannot approve withdrawal in status ${withdrawal.status}`);
+    if (withdrawal.status !== "REQUESTED") {
+      throw new ConflictError(
+        `Cannot approve withdrawal in status ${withdrawal.status}`,
+      );
     }
 
     // 2. Payout confirmed sent -> move to BURN_PENDING; the worker closes it on-chain
     //    and flips the withdrawal to SETTLED once the burn confirms.
     await prisma.withdrawal.update({
       where: { id: withdrawalId },
-      data: { status: 'BURN_PENDING' },
+      data: { status: "BURN_PENDING" },
     });
 
     // 3. Find the associated BURN transaction
-    const burnTx = withdrawal.Transactions.find(tx => tx.type === 'BURN' && tx.status === 'PENDING');
+    const burnTx = withdrawal.Transactions.find(
+      (tx) => tx.type === "BURN" && tx.status === "PENDING",
+    );
     if (!burnTx) {
-      throw new Error('Burn transaction not found for this withdrawal');
+      throw new Error("Burn transaction not found for this withdrawal");
     }
 
     // 4. Enqueue the burn transaction
-    await transactionQueue.add('process-burn', {
+    await transactionQueue.add("process-burn", {
       transactionId: burnTx.id,
       amount: burnTx.amount.toString(),
       referenceId: burnTx.referenceId,
@@ -147,8 +187,9 @@ export class WithdrawalService {
     // The worker takes the burn tx SUBMITTED -> CONFIRMED and sets the withdrawal to SETTLED.
     return {
       withdrawalId: withdrawal.id,
-      status: 'BURN_PENDING',
-      message: 'Payout confirmed. Settlement closure (burn) initiated on-chain.',
+      status: "BURN_PENDING",
+      message:
+        "Payout confirmed. Settlement closure (burn) initiated on-chain.",
     };
   }
 
@@ -156,15 +197,15 @@ export class WithdrawalService {
     const withdrawal = await prisma.withdrawal.findUnique({
       where: { id: withdrawalId },
       include: {
-        Transactions: true
-      }
+        Transactions: true,
+      },
     });
 
     if (!withdrawal || withdrawal.clientId !== clientId) {
-      throw new NotFoundError('Withdrawal not found');
+      throw new NotFoundError("Withdrawal not found");
     }
 
-    const burnTx = withdrawal.Transactions.find(tx => tx.type === 'BURN');
+    const burnTx = withdrawal.Transactions.find((tx) => tx.type === "BURN");
 
     const base = {
       withdrawalId: withdrawal.id,
@@ -176,20 +217,58 @@ export class WithdrawalService {
 
     if (!env.DAO_VERIFICATION_ENABLED) return base;
 
-    const lockTx = withdrawal.Transactions.find((tx) => tx.type === 'LOCK');
-    const releaseTx = withdrawal.Transactions.find((tx) => tx.type === 'RELEASE');
+    const lockTx = withdrawal.Transactions.find((tx) => tx.type === "LOCK");
+    const releaseTx = withdrawal.Transactions.find(
+      (tx) => tx.type === "RELEASE",
+    );
     const proposal = await DaoService.latestForWithdrawal(withdrawal.id);
+    let status = withdrawal.status;
+    let legacyReleaseInferred = false;
+    if (
+      status === "FAILED" &&
+      burnTx?.status === "FAILED" &&
+      proposal?.state === "APPROVED" &&
+      !releaseTx &&
+      burnTx.referenceId
+    ) {
+      try {
+        const settlement = await blockchainService.getSettlement(
+          burnTx.referenceId,
+        );
+        legacyReleaseInferred =
+          settlement.exists && settlement.status === "MINTED";
+        if (legacyReleaseInferred) status = "RELEASED";
+      } catch (error) {
+        // Preserve the transaction failure response; the next status poll can retry the chain read.
+        logger.warn(
+          `Could not reconcile withdrawal ${withdrawal.id} with the settlement contract: ${(error as Error).message}`,
+        );
+      }
+    }
+    const burnFailedAfterApproval =
+      burnTx?.status === "FAILED" &&
+      proposal?.state === "APPROVED" &&
+      status === "RELEASED";
     return {
       ...base,
+      status,
       failureReason:
-        (lockTx?.status === 'FAILED' && lockTx.failureReason) ||
-        (releaseTx?.status === 'FAILED' && releaseTx.failureReason) ||
-        (burnTx?.status === 'FAILED' && withdrawal.status === 'FAILED' && burnTx.failureReason) ||
+        (lockTx?.status === "FAILED" && lockTx.failureReason) ||
+        (releaseTx?.status === "FAILED" && releaseTx.failureReason) ||
+        (burnTx?.status === "FAILED" &&
+          (withdrawal.status === "FAILED" || burnFailedAfterApproval) &&
+          burnTx.failureReason) ||
         null,
       lockTxHash: lockTx?.blockchainTxHash ?? null,
       releaseTxHash: releaseTx?.blockchainTxHash ?? null,
+      releaseTransactionStatus: releaseTx?.status ?? null,
+      fundsReleased:
+        status === "RELEASED" &&
+        (releaseTx?.status === "CONFIRMED" || legacyReleaseInferred),
       verification: DaoService.verificationSummary(proposal),
-      message: proposal?.resolutionMessage ?? null,
+      message: legacyReleaseInferred
+        ? `The withdrawal hold was released on-chain, but settlement transfer/burn failed: ${burnTx?.failureReason}. The settlement remains with the partner.`
+        : (proposal?.resolutionMessage ?? null),
     };
   }
 
@@ -198,17 +277,37 @@ export class WithdrawalService {
    * DAO has verified the off-chain payout, or release it if that never happens.
    */
   private static async createVerifiedWithdrawal(data: WithdrawalRequest) {
-    const { clientId, idempotencyKey, amount, bankDetails, fromAddress, referenceId, windowMinutes } = data;
+    const {
+      clientId,
+      idempotencyKey,
+      amount,
+      bankDetails,
+      fromAddress,
+      referenceId,
+      windowMinutes,
+    } = data;
 
     const inFlight = await prisma.transaction.findFirst({
-      where: { referenceId, type: 'LOCK', withdrawal: { status: { in: ACTIVE_DAO_STATES } } },
+      where: {
+        referenceId,
+        type: "LOCK",
+        withdrawal: { status: { in: ACTIVE_DAO_STATES } },
+      },
     });
     if (inFlight) {
-      throw new ConflictError(`A withdrawal for settlement ${referenceId} is already in progress`);
+      throw new ConflictError(
+        `A withdrawal for settlement ${referenceId} is already in progress`,
+      );
     }
 
     const withdrawal = await prisma.withdrawal.create({
-      data: { clientId, idempotencyKey, amount, bankDetails, status: 'LOCK_PENDING' },
+      data: {
+        clientId,
+        idempotencyKey,
+        amount,
+        bankDetails,
+        status: "LOCK_PENDING",
+      },
     });
 
     const proposal = await DaoService.createWithdrawalProposal({
@@ -224,36 +323,40 @@ export class WithdrawalService {
     await prisma.transaction.create({
       data: {
         clientId,
-        type: 'BURN',
+        type: "BURN",
         referenceId,
         withdrawalId: withdrawal.id,
         proposalId: proposal.id,
         amount,
         fromAddress,
-        status: 'AWAITING_APPROVAL',
+        status: "AWAITING_APPROVAL",
       },
     });
 
     const lockTx = await prisma.transaction.create({
       data: {
         clientId,
-        type: 'LOCK',
+        type: "LOCK",
         referenceId,
         withdrawalId: withdrawal.id,
         proposalId: proposal.id,
         amount,
         fromAddress,
-        status: 'PENDING',
+        status: "PENDING",
       },
     });
-    await transactionQueue.add('process-lock', { transactionId: lockTx.id, referenceId, amount });
+    await transactionQueue.add("process-lock", {
+      transactionId: lockTx.id,
+      referenceId,
+      amount,
+    });
 
     return {
       withdrawalId: withdrawal.id,
       status: withdrawal.status,
       verification: DaoService.verificationSummary(proposal),
       message:
-        'Withdrawal requested. Funds are being locked on-chain. Pay the customer, then submit the payout reference for DAO verification.',
+        "Withdrawal requested. Funds are being locked on-chain. Pay the customer, then submit the payout reference for DAO verification.",
     };
   }
 
@@ -264,55 +367,89 @@ export class WithdrawalService {
     proof: { payoutReference?: string; notes?: string },
   ) {
     if (!env.DAO_VERIFICATION_ENABLED) {
-      throw new ConflictError('Payout proofs are only used when DAO verification is enabled');
+      throw new ConflictError(
+        "Payout proofs are only used when DAO verification is enabled",
+      );
     }
     const payoutReference = proof.payoutReference?.trim();
     if (!payoutReference) {
-      throw new ValidationError('payoutReference (the bank reference / UTR of the payout) is required');
+      throw new ValidationError(
+        "payoutReference (the bank reference / UTR of the payout) is required",
+      );
     }
 
-    const withdrawal = await prisma.withdrawal.findUnique({ where: { id: withdrawalId } });
-    if (!withdrawal || withdrawal.clientId !== clientId) throw new NotFoundError('Withdrawal not found');
-    if (withdrawal.status === 'LOCK_PENDING') {
-      throw new ConflictError('Funds are still being locked on-chain. Submit the payout reference once the lock confirms.');
+    const withdrawal = await prisma.withdrawal.findUnique({
+      where: { id: withdrawalId },
+    });
+    if (!withdrawal || withdrawal.clientId !== clientId)
+      throw new NotFoundError("Withdrawal not found");
+    if (withdrawal.status === "LOCK_PENDING") {
+      throw new ConflictError(
+        "Funds are still being locked on-chain. Submit the payout reference once the lock confirms.",
+      );
     }
-    if (withdrawal.status !== 'LOCKED') {
-      throw new ConflictError(`Cannot submit a payout reference while the withdrawal is ${withdrawal.status}`);
+    if (withdrawal.status !== "LOCKED") {
+      throw new ConflictError(
+        `Cannot submit a payout reference while the withdrawal is ${withdrawal.status}`,
+      );
     }
 
     const proposal = await DaoService.latestForWithdrawal(withdrawal.id);
-    if (!proposal || proposal.state !== 'PENDING') {
-      throw new ConflictError('This withdrawal is no longer awaiting verification');
+    if (!proposal || proposal.state !== "PENDING") {
+      throw new ConflictError(
+        "This withdrawal is no longer awaiting verification",
+      );
     }
 
     const notes = proof.notes?.trim();
     await prisma.proposal.update({
       where: { id: proposal.id },
-      data: { payoutReference, proofNotes: notes || null, payoutSubmittedAt: new Date() },
+      data: {
+        payoutReference,
+        proofNotes: notes || null,
+        payoutSubmittedAt: new Date(),
+      },
     });
-    await prisma.withdrawal.update({ where: { id: withdrawal.id }, data: { status: 'PAYOUT_SUBMITTED' } });
+    await prisma.withdrawal.update({
+      where: { id: withdrawal.id },
+      data: { status: "PAYOUT_SUBMITTED" },
+    });
     await DaoService.addEvent(
       proposal.id,
-      'PAYOUT_PROOF',
-      `Client reports the payout was sent with bank reference ${payoutReference}${notes ? ` (${notes})` : ''}. Ready for DAO verification.`,
-      'client',
+      "PAYOUT_PROOF",
+      `Client reports the payout was sent with bank reference ${payoutReference}${notes ? ` (${notes})` : ""}. Ready for DAO verification.`,
+      "client",
     );
 
     return this.getWithdrawalStatus(withdrawal.id, clientId);
   }
 
   /** The client flags a bank delay to get more time before the locked funds are released. */
-  static async requestExtension(withdrawalId: string, clientId: string, reason?: string) {
+  static async requestExtension(
+    withdrawalId: string,
+    clientId: string,
+    reason?: string,
+  ) {
     if (!env.DAO_VERIFICATION_ENABLED) {
-      throw new ConflictError('Extensions are only used when DAO verification is enabled');
+      throw new ConflictError(
+        "Extensions are only used when DAO verification is enabled",
+      );
     }
-    const withdrawal = await prisma.withdrawal.findUnique({ where: { id: withdrawalId } });
-    if (!withdrawal || withdrawal.clientId !== clientId) throw new NotFoundError('Withdrawal not found');
+    const withdrawal = await prisma.withdrawal.findUnique({
+      where: { id: withdrawalId },
+    });
+    if (!withdrawal || withdrawal.clientId !== clientId)
+      throw new NotFoundError("Withdrawal not found");
 
     const proposal = await DaoService.latestForWithdrawal(withdrawal.id);
-    if (!proposal) throw new NotFoundError('No verification is open for this withdrawal');
+    if (!proposal)
+      throw new NotFoundError("No verification is open for this withdrawal");
 
-    await DaoService.extend(proposal.id, { actor: 'client', reason: reason ?? '', clientId });
+    await DaoService.extend(proposal.id, {
+      actor: "client",
+      reason: reason ?? "",
+      clientId,
+    });
     return this.getWithdrawalStatus(withdrawal.id, clientId);
   }
 }

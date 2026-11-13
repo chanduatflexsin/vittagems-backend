@@ -11,6 +11,8 @@ process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-jwt-secret-value';
 process.env.QUORUM_RPC_URL = process.env.QUORUM_RPC_URL || 'http://localhost:8545';
 process.env.QUORUM_CHAIN_ID = process.env.QUORUM_CHAIN_ID || '7001';
 process.env.VITTAGEM_CONTRACT_ADDRESS = process.env.VITTAGEM_CONTRACT_ADDRESS || '0x0000000000000000000000000000000000000000';
+process.env.KYC_ADMIN_API_KEY = process.env.KYC_ADMIN_API_KEY || 'test-kyc-admin-key-value-at-least-32-characters';
+process.env.KYC_COMPLIANCE_REGISTRY_ADDRESS = process.env.KYC_COMPLIANCE_REGISTRY_ADDRESS || '0x134d59C974792C5bAC41F02E5860AA4F56c44107';
 // Never broadcast real transactions from the unit test suite.
 process.env.BLOCKCHAIN_MODE = process.env.BLOCKCHAIN_MODE || 'mock';
 // The dev .env turns DAO verification on; the suite tests the direct flow by default

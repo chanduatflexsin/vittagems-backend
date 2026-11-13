@@ -9,6 +9,8 @@ import { ProposalController } from './modules/proposals/proposal.controller';
 import { DaoController, authenticateDaoMember } from './modules/dao/dao.controller';
 import { WalletController, DocumentController } from './modules/wallets/wallet.controller';
 import { authenticateApiKey, requirePermissions, requireBlockchainAccess } from './middleware/authMiddleware';
+import { authenticateKycAdmin } from './middleware/kycAdminAuth';
+import { KycController } from './modules/kyc/kyc.controller';
 import { requireIdempotency } from './middleware/idempotency';
 
 const router = Router();
@@ -51,6 +53,70 @@ const rawUpload = raw({ type: () => true, limit: `${env.PROOF_MAX_MB}mb` });
  *         $ref: '#/components/responses/ValidationError'
  */
 router.post('/clients/register', ClientController.registerClient);
+
+// ==========================================
+// ADMIN PARTNER KYC ROUTES
+// ==========================================
+
+/**
+ * @openapi
+ * /admin/partners/{address}/kyc:
+ *   get:
+ *     tags: [KYC Admin]
+ *     summary: Read a partner's on-chain KYC status
+ *     security:
+ *       - kycAdminAuth: []
+ *     parameters:
+ *       - name: address
+ *         in: path
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200: { description: Current identity attestation }
+ *       401: { description: Missing or invalid KYC admin key }
+ *   post:
+ *     tags: [KYC Admin]
+ *     summary: Verify a partner using an off-chain evidence hash
+ *     description: validUntil is a future Unix timestamp in seconds. The configured issuer wallet must hold CLAIM_ISSUER_ROLE on the registry.
+ *     security:
+ *       - kycAdminAuth: []
+ *     parameters:
+ *       - name: address
+ *         in: path
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [validUntil, claimsHash]
+ *             properties:
+ *               validUntil: { type: integer, description: Future Unix timestamp in seconds, example: 1794000000 }
+ *               claimsHash: { type: string, pattern: '^0x[a-fA-F0-9]{64}$', description: SHA-256 hash of off-chain KYC evidence }
+ *     responses:
+ *       200: { description: Identity attested and transaction confirmed }
+ *       400: { description: Invalid address or attestation }
+ *       401: { description: Missing or invalid KYC admin key }
+ *       403: { description: Issuer wallet does not hold CLAIM_ISSUER_ROLE }
+ *   delete:
+ *     tags: [KYC Admin]
+ *     summary: Revoke a partner's identity attestation
+ *     security:
+ *       - kycAdminAuth: []
+ *     parameters:
+ *       - name: address
+ *         in: path
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200: { description: Identity revoked and transaction confirmed }
+ *       401: { description: Missing or invalid KYC admin key }
+ */
+router.get('/admin/partners/:address/kyc', authenticateKycAdmin, KycController.getIdentity);
+router.post('/admin/partners/:address/kyc', authenticateKycAdmin, KycController.setIdentity);
+router.delete('/admin/partners/:address/kyc', authenticateKycAdmin, KycController.revokeIdentity);
 
 // ==========================================
 // CLIENT INFO ROUTES

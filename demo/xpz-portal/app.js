@@ -25,7 +25,7 @@ const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 
 /* ── state ─────────────────────────────────────────────────────────────── */
 const defaultState = () => ({
-  config: { baseUrl: 'http://localhost:3000/api/v1', apiKey: '', wallet: '', clientId: '', company: 'XPZ Corp' },
+  config: { baseUrl: 'https://settlement.vittagems.com/api/v1', apiKey: '', wallet: '', clientId: '', company: 'XPZ Corp' },
   invoices: [],     // {id, ref, customer, amount, currency, corridor, utr, payer, status, txId, txHash, verification, error, createdAt}
   payouts: [],      // {id, ref, toAddress, amount, status, txId, txHash, error, createdAt}
   withdrawals: [],  // {id, ref, amount, bank, status, verification, lockTxHash, releaseTxHash, burnTxHash, message, error, createdAt}

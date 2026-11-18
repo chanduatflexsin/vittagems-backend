@@ -68,6 +68,53 @@ describe("BlockchainService (mock mode)", () => {
     }
   });
 
+  it("uses a minimum EIP-1559 fee on Sepolia when the RPC quote is underpriced", async () => {
+    const originalMode = env.BLOCKCHAIN_MODE;
+    const originalChainId = env.QUORUM_CHAIN_ID;
+    env.BLOCKCHAIN_MODE = "live";
+    env.QUORUM_CHAIN_ID = 11155111;
+
+    try {
+      const liveService = new BlockchainService();
+      const wait = jest.fn().mockResolvedValue({ blockNumber: 1 });
+      const registerPartner = jest
+        .fn()
+        .mockResolvedValue({ hash: "0xregistered", wait });
+      const getFeeData = jest.fn().mockResolvedValue({
+        gasPrice: 247_512n,
+        maxFeePerGas: null,
+        maxPriorityFeePerGas: null,
+      });
+      const getBlock = jest.fn().mockResolvedValue({ baseFeePerGas: 14n });
+
+      Object.assign(liveService, {
+        mock: false,
+        provider: { getFeeData, getBlock },
+        contract: { registerPartner },
+      });
+
+      await liveService.registerPartner(
+        "0x0000000000000000000000000000000000000001",
+        "Acme US",
+      );
+
+      expect(registerPartner).toHaveBeenCalledWith(
+        "0x0000000000000000000000000000000000000001",
+        "Acme US",
+        {
+          type: 2,
+          maxFeePerGas: 2_000_000_000n,
+          maxPriorityFeePerGas: 1_000_000_000n,
+        },
+      );
+      expect(getBlock).toHaveBeenCalledWith("latest");
+      expect(wait).toHaveBeenCalledTimes(1);
+    } finally {
+      env.BLOCKCHAIN_MODE = originalMode;
+      env.QUORUM_CHAIN_ID = originalChainId;
+    }
+  });
+
   it("shares in-flight operator role setup between concurrent calls", async () => {
     const wait = jest.fn().mockResolvedValue(undefined);
     const contract = {

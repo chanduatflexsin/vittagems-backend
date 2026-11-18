@@ -23,6 +23,10 @@ export const SETTLEMENT_STATUS = [
 ] as const;
 export type SettlementStatusName = (typeof SETTLEMENT_STATUS)[number];
 
+const SEPOLIA_CHAIN_ID = 11155111;
+const SEPOLIA_MIN_PRIORITY_FEE_PER_GAS = 1_000_000_000n;
+const SEPOLIA_MIN_MAX_FEE_PER_GAS = 2_000_000_000n;
+
 export interface OnChainSettlement {
   referenceId: string;
   partner: string;
@@ -162,10 +166,6 @@ export class BlockchainService implements IBlockchainService {
     return ethers.parseUnits(amount, this.decimals);
   }
 
-  /** GoQuorum is a zero-gas network; all txs must be sent with gasPrice 0. */
-  // private txOverrides(): ethers.Overrides {
-  //   return { gasPrice: 0, type: 0 };
-  // }
   private async txOverrides(): Promise<ethers.Overrides> {
     if (this.mock || env.BLOCKCHAIN_MODE === "mock") {
       return {};
@@ -182,6 +182,35 @@ export class BlockchainService implements IBlockchainService {
     // Ethereum Sepolia / EVM networks (e.g. chainId 11155111): EIP-1559
     try {
       const feeData = await this.provider.getFeeData();
+
+      if (env.QUORUM_CHAIN_ID === SEPOLIA_CHAIN_ID) {
+        const maxPriorityFeePerGas = [
+          ((feeData.maxPriorityFeePerGas ?? 0n) * 130n) / 100n,
+          SEPOLIA_MIN_PRIORITY_FEE_PER_GAS,
+        ].reduce((max, fee) => (fee > max ? fee : max));
+
+        let baseFeePerGas = 0n;
+        try {
+          baseFeePerGas =
+            (await this.provider.getBlock("latest"))?.baseFeePerGas ?? 0n;
+        } catch (error: any) {
+          logger.warn(
+            `Could not read latest Sepolia base fee: ${error.message}`,
+          );
+        }
+
+        const maxFeePerGas = [
+          ((feeData.maxFeePerGas ?? 0n) * 130n) / 100n,
+          baseFeePerGas * 2n + maxPriorityFeePerGas,
+          SEPOLIA_MIN_MAX_FEE_PER_GAS,
+        ].reduce((max, fee) => (fee > max ? fee : max));
+
+        return {
+          type: 2,
+          maxFeePerGas,
+          maxPriorityFeePerGas,
+        };
+      }
 
       if (
         feeData.maxFeePerGas !== null &&
@@ -205,6 +234,13 @@ export class BlockchainService implements IBlockchainService {
       };
     } catch (err: any) {
       logger.warn(`Could not fetch feeData for txOverrides: ${err.message}`);
+      if (env.QUORUM_CHAIN_ID === SEPOLIA_CHAIN_ID) {
+        return {
+          type: 2,
+          maxFeePerGas: SEPOLIA_MIN_MAX_FEE_PER_GAS,
+          maxPriorityFeePerGas: SEPOLIA_MIN_PRIORITY_FEE_PER_GAS,
+        };
+      }
       return {};
     }
   }
